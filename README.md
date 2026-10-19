@@ -1,60 +1,73 @@
-# Snapshot Capture Script
+# Kare — Kamera Arşivi
 
-This script is designed to capture snapshots from multiple network video recorders (NVRs) and save them to a specified directory. It utilizes various Node.js modules to achieve the functionality, such as `request`, `fs`, `mkdirp`, `path`, `cron`, and `child_process`.
+İki NVR ve yaklaşık 90 kameradan düzenli snapshot alan, kapasite sınırına göre arşivleyen ve yerel ağdaki tek yöneticiye web arayüzü sunan Node.js uygulaması.
 
-## Prerequisites
+- Varsayılan 15 dakika; kamera bazında çekim aralığı.
+- Geçerli JPEG kontrolü, dört eşzamanlı çekim, sınırlı tekrar deneme.
+- NAS tanımlı değilse proje içindeki `archive/`; tanımlıysa önce yerel tampon, ardından doğrulanmış NAS aktarımı.
+- İlk yedi gün tam saklama; daha eski benzer görüntülerde maskeli sadeleştirme ve varsayılan saatlik koruma.
+- Kapasite %95'e ulaştığında %90'a kadar en eski görüntüleri temizleme. Bu politika yedi günlük ve saatlik korumayı aşabilir.
+- Kamera/tarih filtreleri, önizleme, indirme, kalıcı günlük özetler ve boşluk nedenleri.
 
-Before running this script, ensure that you have the following prerequisites installed:
+## Gereksinimler ve çalıştırma
 
-- Node.js
-- npm (Node Package Manager)
+Linux üzerinde Node.js 22.12 veya üstü desteklenen LTS gerekir. NAS, işletim sistemi tarafından önceden bağlanır; uygulama mount yapmaz. Süreç yönetimi dışarıdan sağlanır; startup/PM2 kurulumu bu projenin kapsamı dışındadır.
 
-## Installation
-
-1. Clone the repository or download the script file `onvif.js` to your local machine.
-2. Open a terminal or command prompt and navigate to the directory where the script file is located.
-3. Run the following command to install the required dependencies:
-
-```shell
-    npm install request fs mkdirp path node-cron
-```
-## Usage
-Open the script file onvif.js in a text editor.
-Modify the script as needed, changing the NVR configurations and file paths according to your setup.
-Save the changes to the script file.
-To execute the script, run the following command in a terminal or command prompt:
-
-```shell
-node onvif.js
+```sh
+npm ci
+cp .env.example .env
 ```
 
-## Script Explanation
-The script starts by importing the necessary modules and creating a directory (**/mnt/QNAP**) to store the captured snapshots.
+İki bağımsız rastgele değer üretip `.env` içine yazın. Örneğin her değer için `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"` kullanılabilir:
 
-The NVRs and their corresponding channels are defined in the nvrs array, which you can modify to match your specific NVR configuration.
+```dotenv
+ARCHIVE_KEY=<64-hex-karakter>
+SETUP_TOKEN=<ayri-rastgele-kurulum-anahtari>
+HOST=0.0.0.0
+PORT=3080
+```
 
-The datetitle variable is initialized with the current timestamp. The **cek()** function is then called to initiate the snapshot capture process.
+`npm start` ile çalıştırın, yerel ağdan `http://<bilgisayar-adresi>:3080` adresini açın. Varsayılan HOST yalnızca `127.0.0.1` dinler; `0.0.0.0` yerel ağ erişimini açar. İnternet yayını kapsam dışındadır.
 
-The **cek()** function loops through each NVR and channel, creating an object for each camera with its relevant details (NVR IP, date title, channel, and ID). These camera objects are stored in the cams array.
+İlk ekranda `SETUP_TOKEN` ve en az 12 karakterlik yönetici parolasıyla yöneticiyi oluşturun. Sonraki girişlerde yalnızca parola gerekir. İlk kurulum tek seferliktir; oturumlar sekiz saat sonra ve uygulama yeniden başladığında sona erer.
 
-The **al()** function is responsible for capturing a snapshot from the last camera in the cams array. It creates a directory based on the current date (saveDir) and sets up a write stream to save the snapshot image file.
+**Ayarlar** üzerinden kapasiteyi, NVR'leri ve kullanılan kanalları ekleyin. Varsayılan boş kurulum cihazlara bağlanmaz. Kapasite belirlenmeden çekim başlamaz. NVR parolaları `ARCHIVE_KEY` ile şifrelenir ve arayüzden geri okunamaz. Anahtar sonradan değiştirilirse mevcut NVR sırları çözülemez; anahtarı güvenle saklayın.
 
-A request is made to the NVR's snapshot URL using the request module. The response is then piped to the write stream, saving the snapshot to the specified directory.
+## Depolama
 
-If an error occurs during the request, the script checks if it is a timeout error. If so, it waits for 15 seconds and retries the request. Otherwise, it logs the error.
+- `archive/<kamera-id>/YYYY/MM/DD/<UTC-zamanı>_<id>.jpg`: NAS yokken özgün arşiv.
+- `data/catalog.sqlite`: yerel SQLite katalog, ayarlar ve kalıcı geçmiş.
+- `data/spool/`: NAS'a aktarım bekleyen tek yerel kopyalar.
+- `data/cache/`: en fazla 128 MiB yeniden üretilebilir önizleme önbelleği.
 
-Once the snapshot is saved, the al() function is called again to capture the next snapshot until all cameras have been processed.
+`DATA_DIR` ile `data/` konumu değiştirilebilir; **daima yerel diskte** olmalıdır. Yerel dosya sisteminde en az 256 MiB rezerv bırakılır; planlanan çekim için ayrıca en fazla 20 MiB görüntü payı aranır. Tampon kotası dolunca mevcut dosyalar korunur, yeni çekimler geçmişte açıklanarak atlanır. Başarılı yerel kayıt ile tamamlanmış NAS aktarımı ayrı durumlardır.
 
-If there are no more cameras to capture snapshots from, the kucukDosyalariTemizle() function is called to delete small-sized files in the saveDir. Finally, the script waits for 20 minutes before starting the capture process again.
+NAS için arşiv yolu, beklenen mount noktası/kaynağı, benzersiz depo kimliği ve tampon kotası girilir. Depo dizinini önceden oluşturun; ayarları kaydettikten sonra **NAS depo kimliğini oluştur** düğmesi doğru mount üzerinde kimlik dosyasını bir kez oluşturur. Mevcut kimlik üzerine yazılmaz. Katalogda görüntü varken depo değişikliği reddedilir; otomatik depo taşıma veya eski betiğin arşivini içe aktarma yoktur.
 
-## Customization
-* NVR Configuration: Modify the **nvrs** array to include your NVRs' IP addresses, titles, and maximum channel numbers.
-* File Directory: Change the **saveDir** variable to specify the directory path where the captured snapshots should be stored.
-* Authentication: Modify the username and password in the snapshot URL (**snapshotUri**) to match your NVR's authentication credentials.
-* Please note that this script assumes a Linux environment and includes a command to mount a network-attached storage (NAS) device. Adjust this section according to your specific requirements if running on a different operating system.
+Tüm NAS dosya çağrıları ayrı süreçtedir. 30 saniyede yanıt alınamazsa ana uygulama beklemeyi bırakır. Yardımcı süreç kernel I/O içinde takılırsa yeni süreçler çoğaltılmaz; yerel disk ve tampon müsaitken çekim sürer. NAS'a erişilemiyor olması dosyanın kaybolduğu anlamına gelmez. Doğru depoda iki ayrı başarılı kontrolde yokluğu doğrulanan görüntü kayıp işaretlenir; katalog kaydı korunur.
 
-## Schedule
-By default, the script is commented out for scheduling using **cron**. If you want to enable automatic periodic execution of the script, uncomment the relevant lines and specify the desired schedule using the **cron.schedule()** function.
+## Sadeleştirme ve geçmiş
 
-## License
-This script is released under the **MIT License**. Feel free to modify and distribute it as per your needs.
+Özgün fotoğraf değiştirilmez. Kamera ekranında tarih/saat ve istenmeyen hareketli alanları dikdörtgenlerle dışlayın; görüntü üzerinde çizim veya yüzde koordinatları kullanılabilir. Aynı kameranın saklanmış iki görüntüsünü karşılaştırma önizlemesinde deneyin. Gündüz/gece örnekleri doğrulanmadan kamera sadeleştirmesini açmayın; varsayılan kapalıdır.
+
+```sh
+npm run calibrate -- first.jpg second.jpg masks.json
+```
+
+`masks.json` örneği: `[{"x":0.65,"y":0,"width":0.35,"height":0.1}]`. Son korunan görüntü referanstır; küçük biriken değişiklikler böylece kaybolmaz. Analiz hatası ve çözünürlük değişiminde görüntü korunur. Maske/hassasiyet/koruma aralığı değişince kamera yeniden doğrulanmalıdır. Silme geri alınamaz; snapshot'lar çekimler arasındaki olayları gösterme garantisi vermez.
+
+Tek tek benzer silinen karelerin kaydı tutulmaz. Kamera/gün özetleri, politika sürümleri ve hata dönemleri kalıcıdır; uygulama kesintileri yaşam işaretinden yaklaşık belirlenir. Veri yoksa neden bilinmiyor olarak kalır. Özetler görüntü kotasıyla silinmez. Yerel veritabanı ve anahtarın yedeğini ayrıca alın; tek yerel diskin kaybına karşı ikinci kopya bu uygulamada otomatik oluşturulmaz.
+
+## Geliştirme ve doğrulama
+
+```sh
+npm test
+npx playwright install chromium
+npm run test:browser
+```
+
+Testler geçici yerel dizinler ve sahte NVR kullanır; cihazlara veya mevcut arşive erişmez. Gerçek Linux, NVR ve NAS kabulü için [kontrol listesi](docs/acceptance.md) kullanılır. HTTP `/cgi-bin/snapshot.cgi` ve Digest kimlik doğrulaması hedeflenir; ONVIF keşfi ve genel üretici uyumluluğu uygulanmamıştır.
+
+[Tasarım](docs/superpowers/specs/2026-10-19-camera-archive-design.md) · [Uygulama planı](docs/superpowers/plans/2026-10-19-camera-archive.md)
+
+Lisans notu: Mevcut paket metadatası ISC'dir; eski README MIT belirtiyordu ve repoda lisans dosyası yoktu. Bu geliştirme lisans seçimini değiştirmez; dağıtım için sahibinin lisansı netleştirmesi gerekir.
