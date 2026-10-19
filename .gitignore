@@ -128,8 +128,8 @@ dmypy.json
 # Pyre type checker
 .pyre/
 node_modules/
-archive/
-data/
+/archive/
+/data/
 .superpowers/
 test-results/
 playwright-report/
