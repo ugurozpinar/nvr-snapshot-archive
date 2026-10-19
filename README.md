@@ -1,4 +1,4 @@
-# Kare: NVR snapshot archive
+# NVR snapshot archive
 
 **Save scheduled JPEG snapshots from a compatible NVR. Browse by camera and date, control storage, and inspect gaps in the archive.**
 
@@ -15,7 +15,7 @@ For developers and Linux operators who want a periodic photo history alongside a
 Use Node.js **22.13+ on the 22 or 24 LTS line**, npm, and Git. Production targets Linux; this fixture also runs on Windows. Native dependencies (`better-sqlite3`, `argon2`, `sharp`) may need a compiler toolchain if prebuilt binaries are unavailable.
 
 ```sh
-git clone https://github.com/ugurozpinar/onvif-snapshot.git
+git clone [https://github.com/ugurozpinar/onvif-snapshot.git](https://github.com/ugurozpinar/onvif-snapshot.git)
 cd onvif-snapshot
 npm ci
 node test/helpers/browser-server.js
@@ -46,6 +46,7 @@ In the cloned directory, after `npm ci`, create `.env` with two independent rand
 ```sh
 node -e "const fs=require('node:fs'),c=require('node:crypto');fs.writeFileSync('.env','ARCHIVE_KEY='+c.randomBytes(32).toString('hex')+'\nSETUP_TOKEN='+c.randomBytes(32).toString('hex')+'\nHOST=127.0.0.1\nPORT=3080\n',{flag:'wx',mode:0o600})"
 npm start
+
 ```
 
 Open [http://127.0.0.1:3080](http://127.0.0.1:3080). Read `SETUP_TOKEN` from your local `.env` and create the administrator with a new password of at least 12 characters. Keep `ARCHIVE_KEY`: changing it makes stored NVR passwords unreadable.
@@ -60,40 +61,37 @@ In **Ayarlar**:
 
 No cameras or device credentials ship with a normal installation. Local images go into `archive/`; catalog, settings and spool go into `data/`. Keep `DATA_DIR` on local disk and run only one application instance per data directory. LAN access requires changing `HOST`; internet deployment is outside the current scope.
 
-For NAS setup, comparison masks, retention details, backups and shutdown behavior, read the [operations guide (Turkish)](docs/operations.md). Before relying on real hardware, complete the [device acceptance checklist](docs/acceptance.md).
+For NAS setup, comparison masks, retention details, backups and shutdown behavior, read the [operations guide (Turkish)](https://www.google.com/search?q=docs/operations.md). Before relying on real hardware, complete the [device acceptance checklist](https://www.google.com/search?q=docs/acceptance.md).
 
 ## Choose the right tool
 
-| Need                                                              | Start here                                                                                |
-| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Need | Start here |
+| --- | --- |
 | Periodic still-image history alongside an existing compatible NVR | Kare: local persistence, optional verified NAS transfer, quota and gap history in one app |
-| Live object detection and video recording                         | [Frigate](https://github.com/blakeblackshear/frigate)                                     |
-| A broader Linux surveillance system                               | [ZoneMinder](https://github.com/ZoneMinder/zoneminder)                                    |
-| ONVIF discovery, PTZ or a camera integration library              | [agsh/onvif](https://github.com/agsh/onvif)                                               |
+| Live object detection and video recording | [Frigate](https://github.com/blakeblackshear/frigate) |
+| A broader Linux surveillance system | [ZoneMinder](https://github.com/ZoneMinder/zoneminder) |
+| ONVIF discovery, PTZ or a camera integration library | [agsh/onvif](https://github.com/agsh/onvif) |
 
 Kare's case is the combined archive workflow. There is no measured claim that it is faster, smaller or more reliable than these alternatives. For one camera and a folder of JPEGs, a scheduled script may be enough.
 
 ## Know the limits before keeping images
 
-- Capacity cleanup starts at 95% of the configured archive quota and targets 90%; it can override the seven-day and hourly retention protections. Deletion is irreversible.
-- Similar-image thinning is disabled by default. Validate masks and day/night samples before enabling it. Comparison masks affect analysis, **not privacy redaction**: original images remain unchanged.
-- NAS outages can be buffered only while local space and spool quota permit; otherwise new captures are skipped. A transferred image is not an automatic second backup.
-- Gap summaries are aggregate records. Startup outage boundaries are approximate; an unknown cause stays unknown.
-- The 90-camera fixture is not evidence of real-device capacity. No real hardware compatibility matrix or storage savings measurements are available yet.
-- Back up the local database and encryption key separately. There is no automatic replica, archive migration or import from the old script.
+* Capacity cleanup starts at 95% of the configured archive quota and targets 90%; it can override the seven-day and hourly retention protections. Deletion is irreversible.
+* Similar-image thinning is disabled by default. Validate masks and day/night samples before enabling it. Comparison masks affect analysis, **not privacy redaction**: original images remain unchanged.
+* NAS outages can be buffered only while local space and spool quota permit; otherwise new captures are skipped. A transferred image is not an automatic second backup.
+* Gap summaries are aggregate records. Startup outage boundaries are approximate; an unknown cause stays unknown.
+* The 90-camera fixture is not evidence of real-device capacity. No real hardware compatibility matrix or storage savings measurements are available yet.
+* Back up the local database and encryption key separately. There is no automatic replica, archive migration or import from the old script.
 
 ## Help make the next claim verifiable
 
-The most useful contribution now is a sanitized hardware acceptance report: NVR model/firmware, Linux and Node versions, channel behavior, and observed results from the [checklist](docs/acceptance.md). Never attach camera credentials or private images.
+The most useful contribution now is a sanitized hardware acceptance report: NVR model/firmware, Linux and Node versions, channel behavior, and observed results from the [checklist](https://www.google.com/search?q=docs/acceptance.md). Never attach camera credentials or private images.
 
-For a bug, include the commit, reproduction steps, expected/actual behavior and redacted error codes in a [GitHub issue](https://github.com/ugurozpinar/onvif-snapshot/issues). Small documentation corrections and reproducible fixes are welcome; discuss new device adapters before building them. See [CONTRIBUTING.md](CONTRIBUTING.md) for checks and [the architecture map](docs/architecture.md) for entry points. No response-time commitment is promised.
+For a bug, include the commit, reproduction steps, expected/actual behavior and redacted error codes in a [GitHub issue](https://github.com/ugurozpinar/onvif-snapshot/issues). Small documentation corrections and reproducible fixes are welcome; discuss new device adapters before building them. See [CONTRIBUTING.md](https://www.google.com/search?q=CONTRIBUTING.md) for checks and [the architecture map](https://www.google.com/search?q=docs/architecture.md) for entry points. No response-time commitment is promised.
 
 ```sh
 npm run check
 npx playwright install chromium
 npm run test:browser
+
 ```
-
-Tests use temporary directories and synthetic inputs. Configured CI and local results do not replace real hardware acceptance. See the [positioning and verification record](docs/repository-review.md).
-
-**License status:** package metadata says ISC, the historical README said MIT, and no license file is present. The owner needs to resolve this before presenting a clear open-source license grant; this documentation does not choose a license on their behalf.
