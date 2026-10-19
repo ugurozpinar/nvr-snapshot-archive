@@ -2,8 +2,6 @@
 require('./src/app')
   .main()
   .catch((e) => {
-    console.error(
-      JSON.stringify({ event: 'startup_failed', code: e.code || 'CONFIG_OR_LOCAL_STORAGE_ERROR' }),
-    );
+    console.error(JSON.stringify(require('./src/startup-error').startupFailure(e)));
     process.exitCode = 1;
   });

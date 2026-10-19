@@ -164,12 +164,6 @@ async function main() {
 module.exports = { createApp, main };
 if (require.main === module)
   main().catch((e) => {
-    console.error(
-      JSON.stringify({
-        event: 'startup_failed',
-        code: e.code || 'CONFIG_OR_LOCAL_STORAGE_ERROR',
-        message: e.message?.startsWith('ARCHIVE_KEY') ? e.message : undefined,
-      }),
-    );
+    console.error(JSON.stringify(require('./startup-error').startupFailure(e)));
     process.exitCode = 1;
   });

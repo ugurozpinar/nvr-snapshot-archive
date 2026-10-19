@@ -8,7 +8,7 @@ Planın 11 yazılım görevi uygulandı: yerel SQLite katalog ve sır şifreleme
 
 ## Doğrulama
 
-- `npm test`: 29 entegrasyon/hata testi; geçici dizinler, sahte HTTP NVR, gerçek SQLite/Sharp ve sahte/takılan NAS taşıması.
+- `npm test`: 31 entegrasyon/hata testi; geçici dizinler, sahte HTTP NVR, gerçek SQLite/Sharp ve sahte/takılan NAS taşıması.
 - `npm run test:browser`: gerçek Chromium'da kurulum/giriş, 90 kamera, son görüntü önizlemesi, arşiv tarama, indirme bağlantısı, geçmiş açıklaması, kamera aralığı, maske çizimi, dar ekran ve çıkış.
 - Üretim bağımlılıklarının npm audit sonucu: bilinen açık bulunmadı.
 - Kaynaklar Prettier ile biçimlendirildi; diff boşluk kontrolü yapıldı.
@@ -43,3 +43,7 @@ Kararlar uygulama günlüğündeki sırayla:
 8. Gerçek Linux kernel I/O, donanım kimlik doğrulaması, NAS kalıcılığı ve sahne eşikleri dağıtım kabulü olarak bırakıldı. Sonuç: yazılım testleri donanım uyumluluğu veya güvenli sahne eşiği garantisi sayılmaz.
 
 Ertelenmiş küçük kod inceleme bulgusu yok. Lisans seçimi değiştirilmedi; mevcut paket metadatası ISC, eski README MIT idi ve lisans dosyası yoktu. Gerçek kamera kalibrasyonu tamamlanana kadar benzerlik silmesi varsayılan kapalıdır. Eski arşiv otomatik içe aktarılmaz veya temizlenmez.
+
+## Başlangıç hatası düzeltmesi
+
+Geçersiz `ARCHIVE_KEY` başlangıçta genel bir hata kodunun arkasında gizleniyordu. Her iki giriş dosyası artık sır değerlerini yazdırmadan `INVALID_ARCHIVE_KEY` ve gerekli 64 hexadecimal karakter açıklamasını gösteriyor. Port, izin ve disk doluluğu için de sabit güvenli açıklamalar var. Gerçek giriş dosyalarında hata çıktısı regresyon testleri eklendi; tam takım 31/31 geçti. Yerel .env düzeltildikten sonra uygulamanın 3080 portunda başlatılıp kontrollü kapatılması ayrıca doğrulandı.

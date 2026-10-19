@@ -1,7 +1,9 @@
 const path = require('node:path');
 function loadConfig(env = process.env, projectRoot = path.resolve(__dirname, '..')) {
   if (!/^[a-f0-9]{64}$/i.test(env.ARCHIVE_KEY || ''))
-    throw Error('ARCHIVE_KEY must be 32 bytes encoded as 64 hex characters');
+    throw Object.assign(new Error('Invalid archive encryption key'), {
+      code: 'INVALID_ARCHIVE_KEY',
+    });
   const dataRoot = path.resolve(env.DATA_DIR || path.join(projectRoot, 'data'));
   const archiveRoot = path.join(projectRoot, 'archive');
   return {
