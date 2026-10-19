@@ -20,5 +20,9 @@
     "digest-fetch": "3.1.1",
     "express": "5.3.0",
     "sharp": "0.35.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "prettier": "3.9.10"
   }
 }

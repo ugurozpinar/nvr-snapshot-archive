@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Kare — Kamera Arşivi</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <div id="auth-screen" class="auth-shell">
+      <form id="auth-form" class="auth-card">
+        <span class="brand-symbol">▣</span>
+        <p class="eyebrow">KARE / KAMERA ARŞİVİ</p>
+        <h1>Geçmiş, bir kare uzağında.</h1>
+        <p id="auth-note" class="muted">Arşivinize güvenle erişin.</p>
+        <label id="setup-label" hidden
+          >Kurulum anahtarı<input id="setup-token" autocomplete="off" type="password"
+        /></label>
+        <label
+          >Yönetici parolası<input
+            id="password"
+            type="password"
+            autocomplete="current-password"
+            required
+            maxlength="256"
+        /></label>
+        <button id="auth-submit" class="primary" type="submit">Giriş yap</button>
+        <p id="auth-error" class="error" role="alert"></p>
+      </form>
+    </div>
+    <div id="application" hidden>
+      <aside class="sidebar">
+        <a class="brand" href="/"
+          >▣ <span>Kare<small>KAMERA ARŞİVİ</small></span></a
+        >
+        <div class="workspace-label">ÇALIŞMA ALANI</div>
+        <nav aria-label="Ana menü">
+          <button data-page="status" aria-label="Genel durum" class="active">
+            ◉ <span>Genel durum</span></button
+          ><button data-page="archive" aria-label="Arşiv">▦ <span>Arşiv</span></button
+          ><button data-page="settings" aria-label="Ayarlar">⚙ <span>Ayarlar</span></button>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="dot"></span> Yerel ağ · Tek yönetici<button id="logout">Çıkış</button>
+        </div>
+      </aside>
+      <main>
+        <header class="topbar"><span>GÖRÜNTÜ ARŞİVİ</span><span id="clock-label"></span></header>
+        <div id="notice" role="status" aria-live="polite" hidden></div>
+        <section id="page-status" class="page">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">GENEL DURUM</p>
+              <h1>Arşivin nabzı</h1>
+              <p class="muted">Kameralar, depolama ve son çekimler bir arada.</p>
+            </div>
+            <button id="refresh-status">↻ Yenile</button>
+          </div>
+          <div id="warnings"></div>
+          <div class="metrics">
+            <article class="metric">
+              <span>Etkin kameralar</span
+              ><strong data-testid="camera-count" id="camera-count">—</strong
+              ><small id="camera-sub">kamera izleniyor</small>
+            </article>
+            <article class="metric">
+              <span>Arşiv kullanımı</span><strong id="storage-size">—</strong
+              ><progress id="storage-progress" max="100" value="0"></progress
+              ><small id="storage-sub">Kapasite bekleniyor</small>
+            </article>
+            <article class="metric">
+              <span>Tahmini geçmiş</span><strong id="retention-days">—</strong
+              ><small>Ölçülen tüketim · yaklaşık, sadeleştirme öncesi</small>
+            </article>
+            <article class="metric">
+              <span>Yerel tampon</span><strong id="spool-size">—</strong
+              ><small id="nas-state">Depolama kontrol ediliyor</small>
+            </article>
+          </div>
+          <div class="panel">
+            <div class="panel-heading">
+              <h2>Kamera durumu</h2>
+              <span class="tag">CANLI DURUM</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Kamera</th>
+                    <th>Durum</th>
+                    <th>Son başarılı çekim</th>
+                    <th>Çekim aralığı</th>
+                  </tr>
+                </thead>
+                <tbody id="camera-table"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+        <section id="page-archive" class="page" hidden>
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">ZAMAN İÇİNDE</p>
+              <h1>Görüntü arşivi</h1>
+              <p class="muted">Bir kamera seçin, geçmişte bir güne dönün.</p>
+            </div>
+          </div>
+          <form id="archive-filter" class="filter panel">
+            <label>Kamera<select id="archive-camera" required></select></label
+            ><label>Tarih<input id="archive-date" type="date" required /></label
+            ><button class="primary">Görüntüleri getir</button>
+          </form>
+          <div class="section-line">
+            <h2 id="archive-title">Saklanan görüntüler</h2>
+            <span id="frame-count" class="muted"></span>
+          </div>
+          <div id="frames" class="frames"></div>
+          <p id="archive-empty" class="empty">Görüntülemek için kamera ve tarih seçin.</p>
+          <button id="more-frames" hidden>Daha fazla görüntü</button>
+          <details class="panel history-panel" open>
+            <summary>Bu dönemdeki boşluklar ve arşiv işlemleri</summary>
+            <p class="muted">
+              Dönem özetleri, tek bir eksik karenin kesin nedenini göstermez. Kanıt bulunmayan
+              nedenler bilinmiyor kabul edilir.
+            </p>
+            <div id="history-list"></div>
+          </details>
+        </section>
+        <section id="page-settings" class="page" hidden>
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">YÖNETİM</p>
+              <h1>Arşivi şekillendirin</h1>
+              <p class="muted">Bağlantılar, çekim sıklığı ve saklama politikaları.</p>
+            </div>
+          </div>
+          <form id="storage-form" class="panel form-panel">
+            <h2>Depolama</h2>
+            <p class="muted">
+              NAS yolu boşsa proje içindeki archive/ kullanılır. NAS varsa tüm çekimler önce yerel
+              tampona yazılır.
+            </p>
+            <div class="form-grid">
+              <label
+                >Arşiv kapasitesi (GiB)<input
+                  id="quota"
+                  type="number"
+                  min="0.05"
+                  step="any"
+                  required /></label
+              ><label
+                >Yerel tampon kapasitesi (GiB)<input
+                  id="spool-quota"
+                  type="number"
+                  min="0.05"
+                  step="any" /></label
+              ><label class="wide"
+                >NAS arşiv yolu<input id="nas-path" placeholder="/mnt/nas/kare" /></label
+              ><label>Beklenen mount noktası<input id="mount-point" placeholder="/mnt/nas" /></label
+              ><label
+                >Beklenen mount kaynağı<input
+                  id="mount-source"
+                  placeholder="//sunucu/paylasim" /></label
+              ><label>Depo kimliği<input id="depot-id" placeholder="kamera-arsivi" /></label>
+            </div>
+            <label class="check"
+              ><input id="compaction-enabled" type="checkbox" />Yedi günden eski görüntülerde
+              sadeleştirmeyi etkinleştir</label
+            >
+            <p class="muted">
+              Yalnızca karşılaştırması doğrulanmış kameralar sadeleştirilir. Kapasite zorunluluğu
+              yedi günlük görüntüleri de silebilir.
+            </p>
+            <div class="actions">
+              <button class="primary">Depolamayı kaydet</button
+              ><button id="test-nas" type="button">NAS bağlantısını test et</button
+              ><button id="init-nas" type="button">NAS depo kimliğini oluştur</button>
+            </div>
+          </form>
+          <div class="settings-columns">
+            <form id="nvr-form" class="panel form-panel">
+              <h2>NVR bağlantıları</h2>
+              <div id="nvr-list"></div>
+              <input id="nvr-id" type="hidden" />
+              <label>NVR adı<input id="nvr-name" required maxlength="200" /></label
+              ><label
+                >NVR adresi<input
+                  id="nvr-host"
+                  placeholder="http://192.168.1.100"
+                  required /></label
+              ><label>Kullanıcı adı<input id="nvr-user" required autocomplete="off" /></label
+              ><label
+                >NVR parolası<input
+                  id="nvr-password"
+                  type="password"
+                  autocomplete="new-password"
+                  placeholder="Düzenlemede boşsa korunur"
+              /></label>
+              <div class="actions">
+                <button class="primary">NVR'yi kaydet</button
+                ><button id="new-nvr" type="button">Yeni bağlantı</button>
+              </div>
+            </form>
+            <form id="bulk-form" class="panel form-panel">
+              <h2>Kanal aralığından kamera ekle</h2>
+              <label>NVR<select id="bulk-nvr" required></select></label
+              ><label>Kamera ad öneki<input id="bulk-name" value="Kamera" required /></label>
+              <div class="form-grid">
+                <label
+                  >İlk kanal<input
+                    id="bulk-first"
+                    type="number"
+                    min="1"
+                    value="1"
+                    required /></label
+                ><label
+                  >Son kanal<input id="bulk-last" type="number" min="1" value="1" required
+                /></label>
+              </div>
+              <p class="muted">
+                Varsayılan çekim aralığı 15 dakika. Yalnızca kullandığınız kanalları ekleyin.
+              </p>
+              <button class="primary">Kameraları ekle</button>
+            </form>
+          </div>
+          <form id="camera-form" class="panel form-panel">
+            <h2>Kamera ve karşılaştırma ayarları</h2>
+            <label>Düzenlenecek kamera<select id="edit-camera"></select></label>
+            <div id="camera-fields" hidden>
+              <div class="form-grid">
+                <label>Kamera adı<input id="camera-name" required /></label
+                ><label
+                  >Çekim aralığı (dakika)<input
+                    id="camera-interval"
+                    type="number"
+                    min="0.017"
+                    step="any"
+                    required /></label
+                ><label
+                  >Değişmese de koruma aralığı (dakika)<input
+                    id="camera-anchor"
+                    type="number"
+                    min="1"
+                    step="any"
+                    required /></label
+                ><label
+                  >Değişiklik hassasiyeti<select id="camera-sensitivity">
+                    <option value="high">Yüksek · daha fazla kare korur</option>
+                    <option value="medium">Orta</option>
+                    <option value="low">Düşük · daha çok sadeleştirir</option>
+                  </select></label
+                >
+              </div>
+              <label class="check"><input id="camera-enabled" type="checkbox" />Kamera etkin</label>
+              <div class="mask-panel">
+                <div class="section-line">
+                  <h3>Karşılaştırmanın dışında kalan alanlar</h3>
+                  <span data-testid="mask-count" id="mask-count">0 alan</span>
+                </div>
+                <p class="muted">
+                  Tarih/saat yazısı veya hareketli alanlar üzerinde dikdörtgen çizin. Özgün fotoğraf
+                  değişmez.
+                </p>
+                <div class="actions">
+                  <button id="load-mask-image" type="button">Son görüntüyü yükle</button
+                  ><button id="clear-masks" type="button">Alanları temizle</button>
+                </div>
+                <canvas
+                  id="mask-canvas"
+                  hidden
+                  aria-label="Karşılaştırma dışında kalacak alanları seçin"
+                ></canvas>
+                <details>
+                  <summary>Koordinatla alan ekle (yüzde)</summary>
+                  <div class="form-grid">
+                    <label
+                      >Sol (%)<input id="mask-x" type="number" min="0" max="99" value="0" /></label
+                    ><label
+                      >Üst (%)<input id="mask-y" type="number" min="0" max="99" value="0" /></label
+                    ><label
+                      >Genişlik (%)<input
+                        id="mask-w"
+                        type="number"
+                        min="1"
+                        max="99"
+                        value="20" /></label
+                    ><label
+                      >Yükseklik (%)<input id="mask-h" type="number" min="1" max="99" value="10"
+                    /></label>
+                  </div>
+                  <button id="add-mask" type="button">Alan ekle</button>
+                </details>
+              </div>
+              <div class="compare-panel">
+                <h3>Karşılaştırmayı doğrula</h3>
+                <p class="muted">
+                  Önce ayarları kaydedin. Gündüz ve gece örneklerinde değişikliklerin korunduğunu
+                  kontrol edin; sonra kamerayı doğrulanmış işaretleyin.
+                </p>
+                <div class="form-grid">
+                  <label>Birinci görüntü<select id="compare-first"></select></label
+                  ><label>İkinci görüntü<select id="compare-second"></select></label>
+                </div>
+                <button id="compare" type="button">Karşılaştırmayı önizle</button>
+                <p id="compare-result"></p>
+                <label class="check"
+                  ><input id="camera-calibrated" type="checkbox" />Bu kameranın karşılaştırmasını
+                  doğruladım</label
+                >
+              </div>
+              <button class="primary">Kamerayı kaydet</button>
+            </div>
+          </form>
+        </section>
+      </main>
+    </div>
+    <dialog id="viewer">
+      <div class="viewer-bar">
+        <span id="viewer-title"></span><button id="close-viewer">Kapat</button>
+      </div>
+      <img id="viewer-image" alt="Seçilen kamera görüntüsü" />
+      <div class="viewer-bar">
+        <button id="previous-frame" aria-label="Önceki görüntü">← Önceki</button
+        ><a id="download-frame" download>Özgün görüntüyü indir</a
+        ><button id="next-frame" aria-label="Sonraki görüntü">Sonraki →</button>
+      </div>
+      <p id="viewer-state" class="muted"></p>
+    </dialog>
+  </body>
+</html>
