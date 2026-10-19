@@ -1,0 +1,13 @@
+CREATE TABLE IF NOT EXISTS schema_versions(version INTEGER PRIMARY KEY);
+INSERT OR IGNORE INTO schema_versions VALUES(1);
+CREATE TABLE IF NOT EXISTS settings(id TEXT PRIMARY KEY, data TEXT NOT NULL CHECK(json_valid(data)));
+CREATE TABLE IF NOT EXISTS nvrs(id TEXT PRIMARY KEY, data TEXT NOT NULL CHECK(json_valid(data)));
+CREATE TABLE IF NOT EXISTS cameras(id TEXT PRIMARY KEY, data TEXT NOT NULL CHECK(json_valid(data)));
+CREATE UNIQUE INDEX IF NOT EXISTS camera_channel ON cameras(json_extract(data,'$.nvrId'),json_extract(data,'$.channel'));
+CREATE TABLE IF NOT EXISTS images(id TEXT PRIMARY KEY, data TEXT NOT NULL CHECK(json_valid(data)));
+CREATE INDEX IF NOT EXISTS image_time ON images(json_extract(data,'$.capturedAt'),id);
+CREATE INDEX IF NOT EXISTS image_camera_time ON images(json_extract(data,'$.cameraId'),json_extract(data,'$.capturedAt'),id);
+CREATE INDEX IF NOT EXISTS image_state ON images(json_extract(data,'$.state'));
+CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY, data TEXT NOT NULL CHECK(json_valid(data)));
+CREATE TABLE IF NOT EXISTS history(id TEXT PRIMARY KEY, data TEXT NOT NULL CHECK(json_valid(data)));
+CREATE INDEX IF NOT EXISTS history_scope_time ON history(json_extract(data,'$.scope'),json_extract(data,'$.start'));
