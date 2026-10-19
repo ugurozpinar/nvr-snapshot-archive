@@ -17,6 +17,26 @@
 body {
   margin: 0;
 }
+.language-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.language-control label {
+  margin: 0;
+}
+.language-select {
+  width: auto;
+  max-width: 185px;
+  padding: 7px;
+  letter-spacing: normal;
+}
+.auth-language {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+}
 [hidden] {
   display: none !important;
 }
@@ -186,12 +206,14 @@ main {
   min-height: 100vh;
 }
 .topbar {
-  height: 65px;
+  min-height: 65px;
+  gap: 12px;
+  flex-wrap: wrap;
   border-bottom: 1px solid var(--line);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 40px;
+  padding: 10px 40px;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 1px;

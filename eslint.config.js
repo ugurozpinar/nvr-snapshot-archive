@@ -27,7 +27,10 @@ module.exports = [
   },
   {
     files: ['public/**/*.js'],
-    languageOptions: { sourceType: 'script', globals: globals.browser },
+    languageOptions: {
+      sourceType: 'script',
+      globals: { ...globals.browser, KareI18n: 'readonly' },
+    },
   },
   {
     files: ['test/browser/**/*.js'],

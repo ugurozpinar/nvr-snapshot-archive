@@ -39,6 +39,8 @@ async function main() {
   const store = createLocalStore({ repos, config }),
     history = createHistory({ repos });
   const buffer = await jpeg('#3c6260', 800, 450);
+  const job = history.beginCapture({ id: 'cam0' }, Date.parse('2026-10-19T12:00:00Z'));
+  history.finishCapture(job, { status: 'success' });
   for (let i = 0; i < 4; i++)
     await store.persist({
       id: 'photo' + i,

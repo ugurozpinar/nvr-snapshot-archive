@@ -3,6 +3,7 @@ test('administrator browses archive, explains gaps and configures masks and inte
   page,
 }) => {
   await page.goto('/');
+  await page.locator('#auth-language').selectOption('tr');
   await page.getByLabel('Kurulum anahtarı').fill('browser-token');
   await page.getByLabel('Yönetici parolası').fill('browser-password-123');
   await page.getByRole('button', { name: 'Yöneticiyi oluştur' }).click();

@@ -1,4 +1,5 @@
 'use strict';
+const { t, number } = KareI18n;
 const $ = (id) => document.getElementById(id),
   GIB = 1024 ** 3;
 let csrf = '',
@@ -13,6 +14,33 @@ let csrf = '',
   maskImage = null,
   dragStart = null;
 const reasons = {
+  INVALID_DATE: 'Geçerli bir tarih seçin.',
+  INVALID_NVR: 'NVR adını ve kullanıcı adını kontrol edin.',
+  INVALID_NVR_HOST: 'Geçerli bir HTTP veya HTTPS NVR adresi girin.',
+  INVALID_PASSWORD: 'Geçerli bir NVR parolası girin.',
+  PASSWORD_REQUIRED: 'NVR parolası gerekli.',
+  NVR_IN_USE: 'Önce bu NVR üzerindeki kameraları kaldırın.',
+  INVALID_CAMERA: 'Kamera ayarlarını kontrol edin.',
+  INVALID_CHANNEL: 'Kanal 1–1024 arasında olmalı.',
+  INVALID_INTERVAL: 'Çekim aralığı en az bir saniye olmalı.',
+  INVALID_ANCHOR: 'Koruma aralığı çekim aralığından kısa olamaz.',
+  INVALID_FIRST_CHANNEL: 'Geçerli bir ilk kanal girin.',
+  INVALID_LAST_CHANNEL: 'Geçerli bir son kanal girin.',
+  INVALID_RANGE: 'Kanal aralığı sıralı ve en fazla 128 kanal olmalı.',
+  EMPTY_MASKS: 'Önce bir alan ekleyin.',
+  INVALID_CURSOR: 'Görüntü listesini yeniden yükleyin.',
+  CAMERA_REQUIRED: 'Bir kamera seçin.',
+  CAMERA_IMAGE_MISMATCH: 'Aynı kameraya ait iki görüntü seçin.',
+  NOT_FOUND: 'İstenen kayıt bulunamadı.',
+  NAS_MUST_BE_SEPARATE: 'NAS yolu yerel arşivden ayrı olmalı.',
+  INVALID_COMPACTION: 'Sadeleştirme ayarını kontrol edin.',
+  ORIGIN_REJECTED: 'İstek kaynağı reddedildi; uygulamanın kendi adresini kullanın.',
+  ALREADY_CONFIGURED: 'Kurulum zaten tamamlandı; oturum açın.',
+  NVR_HTTP_ERROR: 'NVR geçersiz bir yanıt verdi.',
+  IMAGE_TOO_LARGE: 'Görüntü çok büyük.',
+  NAS_BUSY: 'NAS meşgul; tekrar deneyin.',
+  NAS_REQUIRED: 'Bu işlem için NAS bağlantısı gerekli.',
+  INTERNAL_ERROR: 'İşlem tamamlanamadı',
   AUTH_FAILED: 'Kimlik doğrulama hatası',
   NVR_UNREACHABLE: 'NVR erişim hatası',
   CAPTURE_TIMEOUT: 'Çekim zaman aşımı',
@@ -45,10 +73,17 @@ const reasons = {
   NAS_CONFIG_REQUIRED: 'NAS için mount noktası, kaynak ve depo kimliği gerekli',
   CAMERA_HAS_ARCHIVE_DISABLE_INSTEAD: 'Arşivi olan kamerayı silmek yerine devre dışı bırakın',
 };
+function reason(code) {
+  return reasons[code]
+    ? t(reasons[code])
+    : KareI18n.hasMessage(code)
+      ? t(code)
+      : t('İşlem tamamlanamadı');
+}
 const date = (time) =>
   time == null
     ? '—'
-    : new Intl.DateTimeFormat('tr-TR', {
+    : new Intl.DateTimeFormat(KareI18n.locale(), {
         dateStyle: 'short',
         timeStyle: 'short',
         timeZone: 'Europe/Istanbul',
@@ -57,17 +92,17 @@ const bytes = (n) =>
   n == null
     ? '—'
     : n >= GIB
-      ? (n / GIB).toFixed(1) + ' GiB'
+      ? number(n / GIB, 1) + ' GiB'
       : n >= 1024 ** 2
-        ? (n / 1024 ** 2).toFixed(1) + ' MiB'
-        : (n / 1024).toFixed(1) + ' KiB';
+        ? number(n / 1024 ** 2, 1) + ' MiB'
+        : number(n / 1024, 1) + ' KiB';
 function notice(text, bad = false) {
   $('notice').textContent = text;
   $('notice').classList.toggle('error', bad);
   $('notice').hidden = false;
 }
 function fail(e) {
-  notice(reasons[e.message] || e.message || 'İşlem tamamlanamadı', true);
+  notice(reason(e.message), true);
 }
 function on(id, event, fn) {
   $(id).addEventListener(event, (e) => {
@@ -108,11 +143,14 @@ function showAuth() {
   $('application').hidden = true;
   $('auth-screen').hidden = false;
   $('setup-label').hidden = !setupRequired;
-  $('auth-submit').textContent = setupRequired ? 'Yöneticiyi oluştur' : 'Giriş yap';
-  $('auth-note').textContent = setupRequired
-    ? 'İlk kurulum için .env içindeki anahtarı ve yeni yönetici parolanızı girin.'
-    : 'Arşivinize güvenle erişin.';
+  updateAuthText();
   $('password').minLength = setupRequired ? 12 : 1;
+}
+function updateAuthText() {
+  $('auth-submit').textContent = setupRequired ? t('Yöneticiyi oluştur') : t('Giriş yap');
+  $('auth-note').textContent = setupRequired
+    ? t('İlk kurulum için .env içindeki anahtarı ve yeni yönetici parolanızı girin.')
+    : t('Arşivinize güvenle erişin.');
 }
 async function bootstrap() {
   const session = await api('/api/session');
@@ -159,55 +197,73 @@ on('auth-form', 'submit', async () => {
     setupRequired = false;
     await showApplication();
   } catch (e) {
-    $('auth-error').textContent = reasons[e.message] || e.message;
+    $('auth-error').textContent = reason(e.message);
   }
 });
 on('logout', 'click', async () => {
   await api('/api/logout', {});
   await bootstrap();
 });
+let lastStatus = null,
+  lastHistory = null,
+  lastComparison = null,
+  framesLoaded = false;
 async function refreshStatus() {
-  const data = await api('/api/status'),
-    s = data.storage;
+  renderStatus(await api('/api/status'));
+}
+function renderStatus(data) {
+  lastStatus = data;
+  const s = data.storage;
   $('camera-count').textContent = data.cameras.filter((c) => c.enabled).length;
-  $('camera-sub').textContent =
-    `${data.cameras.length} kayıtlı kamera · ${data.cameras.filter((c) => c.lastError).length} hata`;
+  $('camera-sub').textContent = t(
+    '{0} kayıtlı kamera · {1} hata',
+    data.cameras.length,
+    data.cameras.filter((c) => c.lastError).length,
+  );
   $('storage-size').textContent = bytes(s.bytes);
-  $('storage-sub').textContent = `${bytes(s.quotaBytes)} kapasite · ${s.count} görüntü`;
+  $('storage-sub').textContent = t('{0} kapasite · {1} görüntü', bytes(s.quotaBytes), s.count);
   $('storage-progress').value = s.quotaBytes ? Math.min((s.bytes / s.quotaBytes) * 100, 100) : 0;
   $('retention-days').textContent = s.estimatedDays
-    ? Math.floor(s.estimatedDays) + ' gün'
-    : 'Henüz ölçülmedi';
+    ? t('{0} gün', Math.floor(s.estimatedDays))
+    : t('Henüz ölçülmedi');
   $('spool-size').textContent = bytes(s.pending.bytes);
-  $('nas-state').textContent =
-    `${s.pending.count} aktarım bekliyor · ${data.nas.stuck ? 'NAS işlemi takıldı' : data.nas.available ? 'NAS erişilebilir' : 'Yerel kayıt / NAS doğrulanmadı'}`;
-  $('warnings').replaceChildren(...data.warnings.map((w) => el('div', reasons[w] || w, 'warning')));
+  $('nas-state').textContent = t(
+    '{0} aktarım bekliyor · {1}',
+    s.pending.count,
+    data.nas.stuck
+      ? t('NAS işlemi takıldı')
+      : data.nas.available
+        ? t('NAS erişilebilir')
+        : t('Yerel kayıt / NAS doğrulanmadı'),
+  );
+  $('warnings').replaceChildren(...data.warnings.map((w) => el('div', reason(w), 'warning')));
   if (s.nasFreeBytes != null)
-    $('nas-state').textContent +=
-      ` · NAS boş alan ${bytes(s.nasFreeBytes)} (${data.nas.available ? 'doğrulandı' : 'son ölçüm'}, ${date(s.nasMeasuredAt)})`;
+    $('nas-state').textContent += t(
+      ' · NAS boş alan {0} ({1}, {2})',
+      bytes(s.nasFreeBytes),
+      data.nas.available ? t('doğrulandı') : t('son ölçüm'),
+      date(s.nasMeasuredAt),
+    );
   if (data.runtime?.backgroundError)
     $('warnings').append(
-      el(
-        'div',
-        'Arka plan işi durakladı: ' +
-          (reasons[data.runtime.backgroundError] || data.runtime.backgroundError),
-        'warning',
-      ),
+      el('div', t('Arka plan işi durakladı: ') + reason(data.runtime.backgroundError), 'warning'),
     );
   if (data.scheduler.health)
     $('warnings').append(
-      el('div', 'Yerel veritabanı sağlıksız; ayrıntılı kayıt garanti edilemiyor.', 'warning'),
+      el('div', t('Yerel veritabanı sağlıksız; ayrıntılı kayıt garanti edilemiyor.'), 'warning'),
     );
   if (data.nas.stuck)
     $('warnings').append(
       el(
         'div',
-        'NAS işlemi yanıt vermiyor. Yerel alan yettiği sürece çekimler sürer; NAS için işletim sistemi müdahalesi gerekebilir.',
+        t(
+          'NAS işlemi yanıt vermiyor. Yerel alan yettiği sürece çekimler sürer; NAS için işletim sistemi müdahalesi gerekebilir.',
+        ),
         'warning',
       ),
     );
   if (data.nas.lastError && !data.nas.stuck)
-    $('warnings').append(el('div', reasons[data.nas.lastError] || data.nas.lastError, 'warning'));
+    $('warnings').append(el('div', reason(data.nas.lastError), 'warning'));
   $('camera-table').replaceChildren();
   for (const c of data.cameras) {
     const tr = el('tr');
@@ -216,7 +272,7 @@ async function refreshStatus() {
     if (c.latestImageId) {
       const preview = el('img');
       preview.src = `/api/images/${c.latestImageId}/thumbnail`;
-      preview.alt = c.name + ' son görüntüsü';
+      preview.alt = c.name + t(' son görüntüsü');
       preview.loading = 'lazy';
       wrap.append(preview);
     }
@@ -228,26 +284,30 @@ async function refreshStatus() {
       el(
         'span',
         !c.enabled
-          ? 'Kapalı'
+          ? t('Kapalı')
           : c.lastError
-            ? reasons[c.lastError] || c.lastError
+            ? reason(c.lastError)
             : c.lastSuccess
-              ? 'Çekim başarılı'
-              : 'İlk çekim bekleniyor',
+              ? t('Çekim başarılı')
+              : t('İlk çekim bekleniyor'),
         'pill ' + (!c.enabled ? 'neutral' : c.lastError ? 'bad' : ''),
       ),
     );
-    tr.append(state, el('td', date(c.lastSuccess)), el('td', c.intervalMs / 60000 + ' dk'));
+    tr.append(
+      state,
+      el('td', date(c.lastSuccess)),
+      el('td', number(c.intervalMs / 60000) + t(' dk')),
+    );
     $('camera-table').append(tr);
   }
   if (!data.cameras.length) {
     const tr = el('tr'),
-      td = el('td', 'Henüz kamera eklenmedi. Ayarlar ekranından NVR ve kanalları ekleyin.');
+      td = el('td', t('Henüz kamera eklenmedi. Ayarlar ekranından NVR ve kanalları ekleyin.'));
     td.colSpan = 4;
     tr.append(td);
     $('camera-table').append(tr);
   }
-  $('clock-label').textContent = 'SON KONTROL · ' + date(Date.now());
+  $('clock-label').textContent = t('SON KONTROL · ') + date(Date.now());
 }
 on('refresh-status', 'click', refreshStatus);
 function archiveQuery() {
@@ -269,20 +329,21 @@ async function loadFrames(more = false) {
 }
 function stateLabel(image) {
   return image.availability === 'missing'
-    ? 'Dosya kaybı doğrulandı'
+    ? t('Dosya kaybı doğrulandı')
     : image.availability === 'unavailable'
-      ? 'NAS geçici olarak erişilemiyor'
+      ? t('NAS geçici olarak erişilemiyor')
       : image.state === 'pending'
-        ? 'Yerelde güvenle saklandı · aktarım bekliyor'
-        : 'Arşivde';
+        ? t('Yerelde güvenle saklandı · aktarım bekliyor')
+        : t('Arşivde');
 }
 function renderFrames() {
+  framesLoaded = true;
   $('frames').replaceChildren();
   archiveFrames.forEach((image, index) => {
     const button = el('button', null, 'frame'),
       img = el('img');
     img.src = `/api/images/${image.id}/thumbnail`;
-    img.alt = date(image.capturedAt) + ' kamera görüntüsü';
+    img.alt = date(image.capturedAt) + t(' kamera görüntüsü');
     img.loading = 'lazy';
     img.onerror = () => {
       img.alt = stateLabel(image);
@@ -293,27 +354,45 @@ function renderFrames() {
     button.addEventListener('click', () => openViewer(index));
     $('frames').append(button);
   });
-  $('frame-count').textContent = archiveFrames.length + ' görüntü';
+  $('frame-count').textContent = number(archiveFrames.length) + t(' görüntü');
   $('archive-empty').hidden = !!archiveFrames.length;
-  $('archive-empty').textContent =
-    'Bu dönem için saklanan görüntü bulunamadı. Aşağıdaki geçmiş açıklamalarını inceleyin.';
+  $('archive-empty').textContent = t(
+    'Bu dönem için saklanan görüntü bulunamadı. Aşağıdaki geçmiş açıklamalarını inceleyin.',
+  );
   $('more-frames').hidden = !cursor;
 }
 function renderHistory(entries) {
+  lastHistory = entries;
   $('history-list').replaceChildren();
   for (const entry of entries) {
     let text;
     if (entry.kind === 'daily')
-      text = `${entry.day} · Planlanan ${entry.planned}, başarılı ${entry.success}, başarısız ${entry.failed}, atlanan ${entry.skipped}. Benzerlik: ${entry.deleted.similarity || 0}, kapasite: ${entry.deleted.capacity || 0} görüntü silindi.`;
+      text = t(
+        '{0} · Planlanan {1}, başarılı {2}, başarısız {3}, atlanan {4}. Benzerlik: {5}, kapasite: {6} görüntü silindi.',
+        new Intl.DateTimeFormat(KareI18n.locale(), {
+          dateStyle: 'short',
+          timeZone: 'Europe/Istanbul',
+        }).format(entry.start),
+        entry.planned,
+        entry.success,
+        entry.failed,
+        entry.skipped,
+        entry.deleted.similarity || 0,
+        entry.deleted.capacity || 0,
+      );
     else if (entry.kind === 'setting')
-      text = `Çekim ayarı değişti · ${entry.intervalMs / 60000} dakika · ${entry.enabled ? 'etkin' : 'kapalı'}`;
+      text = t(
+        'Çekim ayarı değişti · {0} dakika · {1}',
+        entry.intervalMs / 60000,
+        entry.enabled ? t('etkin') : t('kapalı'),
+      );
     else
-      text = `${reasons[entry.reason] || entry.reason} · ${date(entry.start)} — ${entry.end == null ? 'devam ediyor' : date(entry.end)}${entry.approximate ? ' · yaklaşık dönem' : ''}${entry.count ? ' · ' + entry.count + ' görüntü (dönem özeti)' : ''}`;
+      text = `${reason(entry.reason)} · ${date(entry.start)} — ${entry.end == null ? t('devam ediyor') : date(entry.end)}${entry.approximate ? t(' · yaklaşık dönem') : ''}${entry.count ? ' · ' + number(entry.count) + t(' görüntü (dönem özeti)') : ''}`;
     $('history-list').append(el('div', text, 'history-item'));
   }
   if (!entries.length)
     $('history-list').append(
-      el('p', 'Bu dönem için açıklayıcı kayıt yok; boşluğun nedeni bilinmiyor.', 'muted'),
+      el('p', t('Bu dönem için açıklayıcı kayıt yok; boşluğun nedeni bilinmiyor.'), 'muted'),
     );
 }
 function openViewer(index) {
@@ -361,22 +440,22 @@ on('storage-form', 'submit', async () => {
     },
     'PUT',
   );
-  notice('Depolama ayarları kaydedildi.');
+  notice(t('Depolama ayarları kaydedildi.'));
 });
 on('test-nas', 'click', async () => {
   const r = await api('/api/nas/test', {});
-  notice('NAS kimliği doğrulandı · ' + bytes(r.freeBytes) + ' boş alan');
+  notice(t('NAS kimliği doğrulandı · {0} boş alan', bytes(r.freeBytes)));
 });
 on('init-nas', 'click', async () => {
   await api('/api/nas/initialize', {});
-  notice('NAS depo kimliği oluşturuldu.');
+  notice(t('NAS depo kimliği oluşturuldu.'));
 });
 function renderNvrs() {
   $('nvr-list').replaceChildren();
   for (const n of nvrs) {
     const row = el('div', null, 'nvr-row');
     row.append(el('span', `${n.name} · ${n.host}`));
-    const edit = el('button', 'Düzenle');
+    const edit = el('button', t('Düzenle'));
     edit.type = 'button';
     edit.onclick = () => {
       $('nvr-id').value = n.id;
@@ -385,13 +464,13 @@ function renderNvrs() {
       $('nvr-user').value = n.username;
       $('nvr-password').value = '';
     };
-    const test = el('button', 'Test');
+    const test = el('button', t('Test'));
     test.type = 'button';
     test.onclick = () =>
       api(`/api/nvrs/${n.id}/test`, { channel: 1 })
-        .then((r) => notice('NVR görüntüsü alındı · ' + bytes(r.bytes)))
+        .then((r) => notice(t('NVR görüntüsü alındı · {0}', bytes(r.bytes))))
         .catch(fail);
-    const remove = el('button', 'Sil');
+    const remove = el('button', t('Sil'));
     remove.type = 'button';
     remove.onclick = () => api(`/api/nvrs/${n.id}`, null, 'DELETE').then(loadLists).catch(fail);
     row.append(edit, test, remove);
@@ -417,7 +496,7 @@ on('nvr-form', 'submit', async () => {
   $('nvr-form').reset();
   $('nvr-id').value = '';
   await loadLists();
-  notice('NVR bağlantısı kaydedildi.');
+  notice(t('NVR bağlantısı kaydedildi.'));
 });
 on('bulk-form', 'submit', async () => {
   await api('/api/cameras/bulk', {
@@ -427,7 +506,7 @@ on('bulk-form', 'submit', async () => {
     last: Number($('bulk-last').value),
   });
   await loadLists();
-  notice('Kameralar eklendi.');
+  notice(t('Kameralar eklendi.'));
 });
 function fillCamera() {
   const c = cameras.find((c) => c.id === $('edit-camera').value);
@@ -445,6 +524,7 @@ function fillCamera() {
   $('compare-first').replaceChildren();
   $('compare-second').replaceChildren();
   $('compare-result').textContent = '';
+  lastComparison = null;
   drawMasks();
 }
 on('edit-camera', 'change', fillCamera);
@@ -464,7 +544,9 @@ on('camera-form', 'submit', async () => {
     'PUT',
   );
   await loadLists();
-  notice('Kamera ayarları kaydedildi. Maske veya hassasiyet değiştiyse doğrulamayı yeniden yapın.');
+  notice(
+    t('Kamera ayarları kaydedildi. Maske veya hassasiyet değiştiyse doğrulamayı yeniden yapın.'),
+  );
 });
 on('copy-masks', 'click', async () => {
   const id = $('edit-camera').value;
@@ -478,7 +560,11 @@ on('copy-masks', 'click', async () => {
     if ($('edit-camera').value === id && JSON.stringify(currentMasks) === JSON.stringify(masks))
       $('camera-calibrated').checked = !!cameras.find((c) => c.id === id)?.calibrated;
     notice(
-      `Alanlar ${result.total} kameraya uygulandı; ${result.updated} kamera güncellendi. Değişen kameraların karşılaştırmasını yeniden doğrulayın.`,
+      t(
+        'Alanlar {0} kameraya uygulandı; {1} kamera güncellendi. Değişen kameraların karşılaştırmasını yeniden doğrulayın.',
+        result.total,
+        result.updated,
+      ),
     );
   } finally {
     copyingMasks = false;
@@ -486,7 +572,7 @@ on('copy-masks', 'click', async () => {
   }
 });
 function drawMasks(preview) {
-  $('mask-count').textContent = currentMasks.length + ' alan';
+  $('mask-count').textContent = number(currentMasks.length) + t(' alan');
   $('copy-masks').disabled = copyingMasks || !currentMasks.length;
   if (!maskImage) return;
   const canvas = $('mask-canvas'),
@@ -516,6 +602,10 @@ on('load-mask-image', 'click', async () => {
   const choices = list.map((i) => ({ ...i, name: date(i.capturedAt) }));
   options($('compare-first'), choices);
   options($('compare-second'), choices);
+  for (const id of ['compare-first', 'compare-second']) {
+    for (const [index, option] of Array.from($(id).options).entries())
+      option.dataset.time = list[index].capturedAt;
+  }
   $('compare-second').selectedIndex = Math.min(1, choices.length - 1);
   const image = new Image();
   await new Promise((resolve, reject) => {
@@ -590,17 +680,42 @@ on('compare', 'click', async () => {
     first: $('compare-first').value,
     second: $('compare-second').value,
   });
-  $('compare-result').textContent =
-    `${result.similar ? 'Benzer; eskiyse sadeleştirilebilir.' : 'Değişiklik var veya analiz belirsiz; korunur.'} Değişen alan: ${result.changedRatio == null ? 'belirsiz' : (result.changedRatio * 100).toFixed(3) + '%'} · Politika ${result.policyVersion}`;
+  renderComparison(result);
 });
+function renderComparison(result) {
+  lastComparison = result;
+  $('compare-result').textContent = t(
+    '{0} Değişen alan: {1} · Politika {2}',
+    result.similar
+      ? t('Benzer; eskiyse sadeleştirilebilir.')
+      : t('Değişiklik var veya analiz belirsiz; korunur.'),
+    result.changedRatio == null ? t('belirsiz') : number(result.changedRatio * 100, 3) + '%',
+    result.policyVersion,
+  );
+}
 $('archive-date').value = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Europe/Istanbul',
   year: 'numeric',
   month: '2-digit',
   day: '2-digit',
 }).format(Date.now());
+KareI18n.init(() => {
+  updateAuthText();
+  if (lastStatus) renderStatus(lastStatus);
+  if (framesLoaded) renderFrames();
+  if (lastHistory) renderHistory(lastHistory);
+  if ($('viewer').open) openViewer(viewerIndex);
+  renderNvrs();
+  if (lastComparison) renderComparison(lastComparison);
+  for (const id of ['compare-first', 'compare-second']) {
+    for (const option of $(id).options) {
+      if (option.dataset.time) option.textContent = date(Number(option.dataset.time));
+    }
+  }
+  drawMasks();
+});
 bootstrap().catch((e) => {
-  $('auth-error').textContent = e.message;
+  $('auth-error').textContent = reason(e.message);
 });
 setInterval(() => {
   if (!$('application').hidden && !$('page-status').hidden && !document.hidden)
