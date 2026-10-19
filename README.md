@@ -1,3 +1,5 @@
+![hero](/public/kare-social-preview-v1.png?raw=true "Optional Title")
+
 # NVR snapshot archive
 
 **Save scheduled JPEG snapshots from a compatible NVR. Browse by camera and date, control storage, and inspect gaps in the archive.**
