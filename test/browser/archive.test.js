@@ -39,6 +39,11 @@ test('administrator browses archive, explains gaps and configures masks and inte
   await page.mouse.move(box.x + 100, box.y + 45);
   await page.mouse.up();
   await expect(page.getByTestId('mask-count')).toHaveText('1 alan');
+  await page.getByRole('button', { name: 'Alanları tüm kameralara kopyala' }).click();
+  await expect(page.getByRole('status')).toContainText('90 kameraya');
+  const copied = await (await page.request.get('/api/cameras')).json();
+  expect(copied.every((c) => c.masks.length === 1)).toBe(true);
+  expect(copied.find((c) => c.id === 'cam1').intervalMs).toBe(900000);
   await page.getByRole('button', { name: 'Kamerayı kaydet' }).click();
   await page.screenshot({ path: 'test-results/archive-settings.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });

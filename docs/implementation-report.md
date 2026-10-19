@@ -8,7 +8,7 @@ Planın 11 yazılım görevi uygulandı: yerel SQLite katalog ve sır şifreleme
 
 ## Doğrulama
 
-- `npm test`: 31 entegrasyon/hata testi; geçici dizinler, sahte HTTP NVR, gerçek SQLite/Sharp ve sahte/takılan NAS taşıması.
+- `npm test`: 32 entegrasyon/hata testi; geçici dizinler, sahte HTTP NVR, gerçek SQLite/Sharp ve sahte/takılan NAS taşıması.
 - `npm run test:browser`: gerçek Chromium'da kurulum/giriş, 90 kamera, son görüntü önizlemesi, arşiv tarama, indirme bağlantısı, geçmiş açıklaması, kamera aralığı, maske çizimi, dar ekran ve çıkış.
 - Üretim bağımlılıklarının npm audit sonucu: bilinen açık bulunmadı.
 - Kaynaklar Prettier ile biçimlendirildi; diff boşluk kontrolü yapıldı.
@@ -47,3 +47,7 @@ Ertelenmiş küçük kod inceleme bulgusu yok. Lisans seçimi değiştirilmedi; 
 ## Başlangıç hatası düzeltmesi
 
 Geçersiz `ARCHIVE_KEY` başlangıçta genel bir hata kodunun arkasında gizleniyordu. Her iki giriş dosyası artık sır değerlerini yazdırmadan `INVALID_ARCHIVE_KEY` ve gerekli 64 hexadecimal karakter açıklamasını gösteriyor. Port, izin ve disk doluluğu için de sabit güvenli açıklamalar var. Gerçek giriş dosyalarında hata çıktısı regresyon testleri eklendi; tam takım 31/31 geçti. Yerel .env düzeltildikten sonra uygulamanın 3080 portunda başlatılıp kontrollü kapatılması ayrıca doğrulandı.
+
+## Hariç tutma alanlarını tüm kameralara kopyalama
+
+Kaynak kameranın ekrandaki alanları tek işlemde tüm kameralara kaydedilebiliyor. İşlem atomik; bir yazma hatasında hiçbir kamera kısmen güncellenmiyor. Diğer ayarlar korunuyor; yalnızca alanları değişen kameraların politika sürümü ilerletilip doğrulaması sıfırlanıyor. Aynı alanları tekrar kopyalamak sürüm artırmıyor. CSRF/yetki, geçersiz alan, boş seçim, eksik kaynak ve işlem geri alma kontrolleri API testinde; kaydedilmemiş çizimin 90 kameraya aktarılması gerçek tarayıcıda doğrulandı. Tam takım 32/32 geçti.

@@ -265,7 +265,15 @@
                 <div class="actions">
                   <button id="load-mask-image" type="button">Son görüntüyü yükle</button
                   ><button id="clear-masks" type="button">Alanları temizle</button>
+                  <button id="copy-masks" type="button" disabled>
+                    Alanları tüm kameralara kopyala
+                  </button>
                 </div>
+                <p class="muted">
+                  Kopyalama, ekrandaki alanları tüm kameralara kaydeder ve mevcut alanların üzerine
+                  yazar. Değişen kameraların karşılaştırma doğrulaması sıfırlanır; diğer kamera
+                  ayarları korunur.
+                </p>
                 <canvas
                   id="mask-canvas"
                   hidden

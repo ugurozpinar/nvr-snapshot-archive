@@ -9,6 +9,7 @@ let csrf = '',
   cursor = null,
   viewerIndex = 0,
   currentMasks = [],
+  copyingMasks = false,
   maskImage = null,
   dragStart = null;
 const reasons = {
@@ -465,8 +466,28 @@ on('camera-form', 'submit', async () => {
   await loadLists();
   notice('Kamera ayarları kaydedildi. Maske veya hassasiyet değiştiyse doğrulamayı yeniden yapın.');
 });
+on('copy-masks', 'click', async () => {
+  const id = $('edit-camera').value;
+  if (!id || !currentMasks.length || copyingMasks) return;
+  const masks = structuredClone(currentMasks);
+  copyingMasks = true;
+  drawMasks();
+  try {
+    const result = await api(`/api/cameras/${id}/copy-masks`, { masks });
+    cameras = await api('/api/cameras');
+    if ($('edit-camera').value === id && JSON.stringify(currentMasks) === JSON.stringify(masks))
+      $('camera-calibrated').checked = !!cameras.find((c) => c.id === id)?.calibrated;
+    notice(
+      `Alanlar ${result.total} kameraya uygulandı; ${result.updated} kamera güncellendi. Değişen kameraların karşılaştırmasını yeniden doğrulayın.`,
+    );
+  } finally {
+    copyingMasks = false;
+    drawMasks();
+  }
+});
 function drawMasks(preview) {
   $('mask-count').textContent = currentMasks.length + ' alan';
+  $('copy-masks').disabled = copyingMasks || !currentMasks.length;
   if (!maskImage) return;
   const canvas = $('mask-canvas'),
     ctx = canvas.getContext('2d');

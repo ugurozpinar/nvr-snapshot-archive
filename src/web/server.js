@@ -311,6 +311,24 @@ function createWebServer(deps) {
     scheduler.refresh();
     res.json(c);
   });
+  app.post('/api/cameras/:id/copy-masks', (req, res) => {
+    if (!repos.cameras.get(req.params.id)) throw apiError('NOT_FOUND', 404);
+    const masks = req.body.masks;
+    validateMasks(masks);
+    if (!Array.isArray(masks) || !masks.length) throw apiError('EMPTY_MASKS');
+    const rows = repos.cameras.list({ limit: 10000 });
+    let updated = 0;
+    repos.transaction(() => {
+      for (const old of rows) {
+        if (JSON.stringify(old.masks || []) === JSON.stringify(masks)) continue;
+        const camera = cameraInput({ masks }, old);
+        repos.cameras.save(camera);
+        history.settingChanged(camera);
+        updated++;
+      }
+    });
+    res.json({ updated, total: rows.length });
+  });
   app.delete('/api/cameras/:id', (req, res) => {
     if (repos.images.list({ cameraId: req.params.id, limit: 1 }).length)
       throw apiError('CAMERA_HAS_ARCHIVE_DISABLE_INSTEAD', 409);

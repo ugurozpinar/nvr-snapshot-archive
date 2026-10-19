@@ -58,6 +58,8 @@ npm run calibrate -- first.jpg second.jpg masks.json
 
 `masks.json` örneği: `[{"x":0.65,"y":0,"width":0.35,"height":0.1}]`. Son korunan görüntü referanstır; küçük biriken değişiklikler böylece kaybolmaz. Analiz hatası ve çözünürlük değişiminde görüntü korunur. Maske/hassasiyet/koruma aralığı değişince kamera yeniden doğrulanmalıdır. Silme geri alınamaz; snapshot'lar çekimler arasındaki olayları gösterme garantisi vermez.
 
+Tarih/saat tüm kameralarda aynı konumdaysa **Alanları tüm kameralara kopyala** düğmesi ekranda çizili alanları kaynak dahil tüm kameralara kaydeder. Önceden ayrıca kaydetmek gerekmez. Mevcut alanlar değiştirilir; diğer kamera ayarları korunur. Yalnızca alanları değişen kameraların karşılaştırma doğrulaması sıfırlanır. Alan çizilmediyse düğme pasiftir.
+
 Tek tek benzer silinen karelerin kaydı tutulmaz. Kamera/gün özetleri, politika sürümleri ve hata dönemleri kalıcıdır; uygulama kesintileri yaşam işaretinden yaklaşık belirlenir. Veri yoksa neden bilinmiyor olarak kalır. Özetler görüntü kotasıyla silinmez. Yerel veritabanı ve anahtarın yedeğini ayrıca alın; tek yerel diskin kaybına karşı ikinci kopya bu uygulamada otomatik oluşturulmaz.
 
 Kamera aralığı değişikliği diğer kameraların takvimini ertelemez. Geciken ve çalışılmayan periyotlar ilgili günün atlanan çekim sayısına yazılır; ani kesintinin sınırları yaklaşık gösterilir. Çekim, yerel kalıcı dosya ve geçmiş kaydı aynı iş kimliğiyle toparlanır. Sadeleştirme ayarı değişirse henüz başlamamış silmeler eski politikayla devam etmez; dosya sistemine zaten gönderilmiş bir silme geri alınamaz.
