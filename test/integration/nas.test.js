@@ -85,11 +85,16 @@ test('unavailability never marks missing and two verified absence tours do', asy
   assert.equal(ctx.repos.images.get('remote').availability, 'unavailable');
   assert.equal(ctx.repos.images.stats().bytes, 500);
   let tour = 0;
-  const nas = { request: async () => ({ exists: false, tour: String(++tour) }) };
+  const nas = {
+    request: async (op) =>
+      op === 'health' ? { tour: String(++tour) } : { exists: false, tour: String(tour) },
+  };
   await verifyPresence('remote', { ...ctx, nas, history });
   assert.notEqual(ctx.repos.images.get('remote').availability, 'missing');
   await verifyPresence('remote', { ...ctx, nas, history });
   assert.equal(ctx.repos.images.get('remote').availability, 'missing');
+  assert.equal(ctx.repos.images.stats().bytes, 0);
+  assert.equal(ctx.repos.images.get('remote').bytes, 500);
   ctx.repos.settings.save({ ...ctx.repos.settings.get('main'), nasPath: '/fixture', depotId: 'd' });
   const pending = await store.persist({
     id: 'p',

@@ -23,6 +23,7 @@ const reasons = {
   ADMIN_DISABLED: 'Yönetici tarafından kapatıldı',
   APP_OFFLINE: 'Uygulama çalışmıyordu',
   NAS_UNAVAILABLE: 'NAS erişilemiyor',
+  NAS_SPACE_LOW: 'NAS boş alanı yetersiz; aktarımlar bekliyor',
   NAS_WRONG_MOUNT: 'NAS mount kimliği uyuşmuyor',
   NAS_WRONG_DEPOT: 'NAS depo kimliği uyuşmuyor',
   FILE_MISSING: 'Dosya kaybı doğrulandı',
@@ -180,6 +181,18 @@ async function refreshStatus() {
   $('nas-state').textContent =
     `${s.pending.count} aktarım bekliyor · ${data.nas.stuck ? 'NAS işlemi takıldı' : data.nas.available ? 'NAS erişilebilir' : 'Yerel kayıt / NAS doğrulanmadı'}`;
   $('warnings').replaceChildren(...data.warnings.map((w) => el('div', reasons[w] || w, 'warning')));
+  if (s.nasFreeBytes != null)
+    $('nas-state').textContent +=
+      ` · NAS boş alan ${bytes(s.nasFreeBytes)} (${data.nas.available ? 'doğrulandı' : 'son ölçüm'}, ${date(s.nasMeasuredAt)})`;
+  if (data.runtime?.backgroundError)
+    $('warnings').append(
+      el(
+        'div',
+        'Arka plan işi durakladı: ' +
+          (reasons[data.runtime.backgroundError] || data.runtime.backgroundError),
+        'warning',
+      ),
+    );
   if (data.scheduler.health)
     $('warnings').append(
       el('div', 'Yerel veritabanı sağlıksız; ayrıntılı kayıt garanti edilemiyor.', 'warning'),
@@ -192,10 +205,23 @@ async function refreshStatus() {
         'warning',
       ),
     );
+  if (data.nas.lastError && !data.nas.stuck)
+    $('warnings').append(el('div', reasons[data.nas.lastError] || data.nas.lastError, 'warning'));
   $('camera-table').replaceChildren();
   for (const c of data.cameras) {
     const tr = el('tr');
-    tr.append(el('td', c.name));
+    const name = el('td'),
+      wrap = el('div', null, 'camera-cell');
+    if (c.latestImageId) {
+      const preview = el('img');
+      preview.src = `/api/images/${c.latestImageId}/thumbnail`;
+      preview.alt = c.name + ' son görüntüsü';
+      preview.loading = 'lazy';
+      wrap.append(preview);
+    }
+    wrap.append(el('span', c.name));
+    name.append(wrap);
+    tr.append(name);
     const state = el('td');
     state.append(
       el(
@@ -555,3 +581,7 @@ $('archive-date').value = new Intl.DateTimeFormat('en-CA', {
 bootstrap().catch((e) => {
   $('auth-error').textContent = e.message;
 });
+setInterval(() => {
+  if (!$('application').hidden && !$('page-status').hidden && !document.hidden)
+    refreshStatus().catch(fail);
+}, 30000);

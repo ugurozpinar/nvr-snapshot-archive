@@ -69,11 +69,19 @@ function createWebServer(deps) {
       freeBytes = await deps.store.localSpace();
     } catch {}
     res.json({
-      cameras: repos.cameras.list({ limit: 10000 }),
+      cameras: repos.cameras.list({ limit: 10000 }).map((camera) => {
+        const latest = repos.db
+          .prepare(
+            "SELECT id,json_extract(data,'$.capturedAt') capturedAt FROM images WHERE json_extract(data,'$.cameraId')=? ORDER BY json_extract(data,'$.capturedAt') DESC,id DESC LIMIT 1",
+          )
+          .get(camera.id);
+        return { ...camera, latestImageId: latest?.id, latestImageAt: latest?.capturedAt };
+      }),
       storage: storageStats(deps),
       nas: nas.status(),
       scheduler: scheduler.status(),
       localFreeBytes: freeBytes,
+      runtime: deps.runtimeStatus?.() || {},
       warnings: [
         !repos.settings.get('main')?.quotaBytes ? 'QUOTA_REQUIRED' : null,
         !repos.settings.get('main')?.compactionEnabled ? 'COMPACTION_DISABLED' : null,
@@ -142,6 +150,8 @@ function createWebServer(deps) {
       repos.images.stats().count
     )
       throw apiError('DEPOT_IN_USE', 409);
+    s.compactionVersion =
+      (old.compactionVersion || 0) + (s.compactionEnabled !== old.compactionEnabled ? 1 : 0);
     repos.settings.save(s);
     scheduler.refresh();
     res.json(s);
@@ -365,15 +375,25 @@ function createWebServer(deps) {
     const code = err.code || 'INTERNAL_ERROR';
     const status =
       err.status ||
-      (['NAS_UNAVAILABLE', 'NAS_BUSY', 'NAS_REQUIRED'].includes(code)
+      (['NAS_UNAVAILABLE', 'NAS_BUSY', 'NAS_REQUIRED', 'NAS_SPACE_LOW'].includes(code)
         ? 503
-        : code.startsWith('SQLITE_CONSTRAINT')
-          ? 409
-          : code === 'ENOENT'
-            ? 404
-            : code === 'INVALID_MASK'
-              ? 400
-              : 500);
+        : [
+              'AUTH_FAILED',
+              'NVR_UNREACHABLE',
+              'NVR_HTTP_ERROR',
+              'INVALID_IMAGE',
+              'IMAGE_TOO_LARGE',
+            ].includes(code)
+          ? 502
+          : code === 'CAPTURE_TIMEOUT'
+            ? 504
+            : code.startsWith('SQLITE_CONSTRAINT')
+              ? 409
+              : code === 'ENOENT'
+                ? 404
+                : code === 'INVALID_MASK'
+                  ? 400
+                  : 500);
     res.status(status).json({ error: status === 500 ? 'INTERNAL_ERROR' : code });
   });
   return app;

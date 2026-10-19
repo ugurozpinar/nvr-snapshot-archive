@@ -17,6 +17,21 @@ async function compactCamera(cameraId, deps) {
     limit: 200,
   });
   const victims = [];
+  const policy = {
+    cameraId,
+    version: policyVersion,
+    compactionVersion: settings.compactionVersion || 0,
+  };
+  const valid = () => {
+    const c = repos.cameras.get(cameraId),
+      s = repos.settings.get('main');
+    return (
+      !!c?.calibrated &&
+      c.policyVersion === policyVersion &&
+      !!s?.compactionEnabled &&
+      (s.compactionVersion || 0) === policy.compactionVersion
+    );
+  };
   let after = progress.after;
   for (const image of images) {
     if (
@@ -47,9 +62,13 @@ async function compactCamera(cameraId, deps) {
     }
     after = { time: image.capturedAt, id: image.id };
   }
-  if (victims.length) await deleteBatch(victims, 'similarity', deps);
+  if (!valid()) return { deleted: 0, cancelled: true };
+  const result = victims.length
+    ? await deleteBatch(victims, 'similarity', deps, null, policy)
+    : { deleted: 0 };
   // Cursor advances only after all physical deletion and summaries committed.
-  repos.settings.save({ id: key, referenceId: reference?.id, after });
-  return { deleted: victims.length };
+  if (valid() && !result.cancelled)
+    repos.settings.save({ id: key, referenceId: reference?.id, after });
+  return result;
 }
 module.exports = { compactCamera };

@@ -32,9 +32,7 @@ function createHistory({ repos, clock = { now: Date.now } }) {
     repos.history.save(row);
   }
   function openPeriod(scope, reason, extra = {}) {
-    const existing = repos.history
-      .list({ kind: 'period', scope, reason, limit: 10000 })
-      .find((x) => x.end == null);
+    const existing = extra.end == null ? repos.history.openPeriods(scope, reason)[0] : null;
     if (existing) return existing.id;
     const row = {
       id: randomUUID(),
@@ -53,8 +51,7 @@ function createHistory({ repos, clock = { now: Date.now } }) {
     if (p && p.end == null) repos.history.save({ ...p, end: now() });
   }
   function closeScope(scope) {
-    for (const p of repos.history.list({ kind: 'period', scope, limit: 10000 }))
-      if (p.end == null) closePeriod(p.id);
+    for (const p of repos.history.openPeriods(scope)) if (p.end == null) closePeriod(p.id);
   }
   function beginCapture(camera, dueAt) {
     const id = randomUUID();
@@ -107,6 +104,30 @@ function createHistory({ repos, clock = { now: Date.now } }) {
   function heartbeat(clean = false) {
     repos.settings.save({ id: 'heartbeat', time: now(), clean });
   }
+  function recordSkipped(camera, start, count, reason = 'SCHEDULE_SKIPPED', approximate = false) {
+    if (count <= 0) return;
+    repos.transaction(() => {
+      let done = 0;
+      while (done < count) {
+        const at = start + done * camera.intervalMs,
+          day = localDay(at),
+          end = dayStart(day) + 86400000;
+        const n = Math.min(count - done, Math.ceil((end - at) / camera.intervalMs));
+        updateDaily(camera.id, at, (row) => {
+          row.planned += n;
+          row.skipped += n;
+          row.reasons[reason] = (row.reasons[reason] || 0) + n;
+          row.approximateCounts = !!row.approximateCounts || approximate;
+        });
+        done += n;
+      }
+      openPeriod(camera.id, reason, {
+        start,
+        end: start + (count - 1) * camera.intervalMs,
+        approximate,
+      });
+    });
+  }
   function recoverStartup() {
     const last = repos.settings.get('heartbeat');
     if (last && last.time < now())
@@ -115,9 +136,37 @@ function createHistory({ repos, clock = { now: Date.now } }) {
         end: now(),
         approximate: !last.clean,
       });
-    for (const job of repos.jobs.list({ kind: 'capture', limit: 10000 }))
-      finishCapture(job.id, { status: 'failed', reason: 'CAPTURE_INTERRUPTED' });
+    for (const camera of repos.cameras.list({ enabled: true, limit: 10000 }))
+      if (last && camera.nextDueAt) {
+        const start = Math.max(camera.nextDueAt, last.time);
+        const interval = camera.intervalMs || 900000;
+        const first =
+          camera.nextDueAt +
+          Math.max(0, Math.ceil((start - camera.nextDueAt) / interval)) * interval;
+        recordSkipped(
+          { ...camera, intervalMs: interval },
+          first,
+          Math.max(0, Math.ceil((now() - first) / interval)),
+          'APP_OFFLINE',
+          !last.clean,
+        );
+      }
+    recoverCaptures(true);
     heartbeat();
+  }
+  function recoverCaptures(all = false) {
+    for (const job of repos.jobs.list({ kind: 'capture', limit: 10000 })) {
+      if (!all && !job.recoveryNeeded) continue;
+      if (repos.jobs.get(`persist:${job.id}`)) continue;
+      const saved = repos.images.get(job.id);
+      finishCapture(
+        job.id,
+        saved ? { status: 'success' } : { status: 'failed', reason: 'CAPTURE_INTERRUPTED' },
+      );
+      const camera = repos.cameras.get(job.cameraId);
+      if (saved && camera)
+        repos.cameras.save({ ...camera, lastSuccess: saved.capturedAt, lastError: null });
+    }
   }
   function settingChanged(camera) {
     repos.history.save({
@@ -147,8 +196,10 @@ function createHistory({ repos, clock = { now: Date.now } }) {
     closePeriod,
     closeScope,
     recordDeletionBatch,
+    recordSkipped,
     heartbeat,
     recoverStartup,
+    recoverCaptures,
     settingChanged,
     summarize: summary,
     query: (cameraId, from, to) => repos.history.between(cameraId, from, to),

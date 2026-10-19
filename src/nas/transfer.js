@@ -41,10 +41,13 @@ async function verifyPresence(imageId, { repos, nas, history }) {
   const image = repos.images.get(imageId);
   if (!image || image.state !== 'transferred') return;
   try {
+    const health = await nas.request('health', { settings: repos.settings.get('main') });
     const r = await nas.request('stat', {
       settings: repos.settings.get('main'),
       relativePath: image.nasPath,
+      tour: health.tour,
     });
+    if (!health.tour || r.tour !== health.tour) throw error('NAS_HEALTH_REQUIRED');
     if (r.exists) {
       repos.images.save({
         ...image,
@@ -62,20 +65,31 @@ async function verifyPresence(imageId, { repos, nas, history }) {
       availability: missing ? 'missing' : 'unknown',
       verifiedAt: Date.now(),
     });
-    if (missing)
+    if (missing && image.availability !== 'missing')
       history.openPeriod(image.cameraId, 'FILE_MISSING', {
         start: image.capturedAt,
         end: image.capturedAt,
         imageId: image.id,
       });
   } catch (e) {
-    if (e.code !== 'NAS_BUSY') repos.images.save({ ...image, availability: 'unavailable' });
+    if (e.code !== 'NAS_BUSY')
+      repos.images.save({
+        ...image,
+        availability: image.availability === 'missing' ? 'missing' : 'unavailable',
+        absentTours: [],
+      });
   }
 }
 async function readImage(imageId, { repos, store, nas }) {
   const image = repos.images.get(imageId);
   if (!image) throw error('NOT_FOUND');
-  if (image.localPath) return store.read(imageId);
+  if (image.localPath) {
+    try {
+      return await store.read(imageId);
+    } catch (e) {
+      if (e.code !== 'ENOENT' || repos.images.get(imageId)?.state !== 'transferred') throw e;
+    }
+  }
   const chunks = [];
   let offset = 0;
   while (offset <= 20 * 1024 * 1024) {

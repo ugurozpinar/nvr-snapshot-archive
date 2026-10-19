@@ -23,7 +23,8 @@ async function linuxMount(root) {
   if (!best) throw error('NAS_WRONG_MOUNT');
   return best;
 }
-function createNasOperations({ mountProbe = linuxMount } = {}) {
+function createNasOperations({ mountProbe = linuxMount, spaceProbe = fs.statfs } = {}) {
+  let healthTour = null;
   async function verify(settings, initializing = false) {
     if (!settings?.nasPath || !settings.mountPoint || !settings.mountSource || !settings.depotId)
       throw error('NAS_CONFIG_REQUIRED');
@@ -45,9 +46,12 @@ function createNasOperations({ mountProbe = linuxMount } = {}) {
     for (const part of parts) {
       dir = path.join(dir, part);
       if (create)
-        await fs.mkdir(dir).catch((e) => {
-          if (e.code !== 'EEXIST') throw e;
-        });
+        await fs
+          .mkdir(dir)
+          .then(() => syncDir(path.dirname(dir)))
+          .catch((e) => {
+            if (e.code !== 'EEXIST') throw e;
+          });
       const st = await fs.lstat(dir);
       if (st.isSymbolicLink() || !st.isDirectory()) throw error('NAS_SYMLINK');
     }
@@ -60,7 +64,6 @@ function createNasOperations({ mountProbe = linuxMount } = {}) {
   }
   return async function execute(op, payload) {
     const root = await verify(payload.settings, op === 'initialize');
-    const tour = crypto.randomUUID();
     if (op === 'initialize') {
       const marker = path.join(root, '.camera-archive-id');
       const h = await fs.open(marker, 'wx', 0o600);
@@ -74,8 +77,18 @@ function createNasOperations({ mountProbe = linuxMount } = {}) {
       return { initialized: true };
     }
     if (op === 'health') {
-      const s = await fs.statfs(root);
-      return { tour, freeBytes: Number(s.bavail) * Number(s.bsize), verifiedAt: Date.now() };
+      const s = await spaceProbe(root);
+      healthTour = {
+        id: crypto.randomUUID(),
+        root,
+        depotId: payload.settings.depotId,
+        time: Date.now(),
+      };
+      return {
+        tour: healthTour.id,
+        freeBytes: Number(s.bavail) * Number(s.bsize),
+        verifiedAt: Date.now(),
+      };
     }
     if (op === 'transfer') {
       const dest = await target(root, payload.relativePath, true);
@@ -88,8 +101,18 @@ function createNasOperations({ mountProbe = linuxMount } = {}) {
         crypto.createHash('sha256').update(b).digest('hex') === payload.checksum;
       if (existing) {
         if (!valid(existing)) throw error('NAS_CONFLICT');
+        const h = await fs.open(dest, 'r+');
+        try {
+          await h.sync();
+        } finally {
+          await h.close();
+        }
+        await syncDir(path.dirname(dest));
         return { verified: true };
       }
+      const space = await spaceProbe(root);
+      if (Number(space.bavail) * Number(space.bsize) < payload.bytes + 256 * 1024 ** 2)
+        throw error('NAS_SPACE_LOW');
       const data = await fs.readFile(payload.source);
       if (!valid(data)) throw error('LOCAL_CHECKSUM_FAILED');
       const temp = await target(root, payload.relativePath + '.part', true),
@@ -107,10 +130,21 @@ function createNasOperations({ mountProbe = linuxMount } = {}) {
       return { verified: true };
     }
     let filename;
+    const tour = healthTour?.id;
+    if (
+      op === 'stat' &&
+      (!healthTour ||
+        payload.tour !== tour ||
+        healthTour.root !== root ||
+        healthTour.depotId !== payload.settings.depotId ||
+        Date.now() - healthTour.time > 60000)
+    )
+      throw error('NAS_HEALTH_REQUIRED');
     try {
       filename = await target(root, payload.relativePath);
     } catch (e) {
       if (e.code === 'ENOENT' && op === 'stat') return { exists: false, tour };
+      if (e.code === 'ENOENT' && op === 'delete') return { deleted: true };
       throw e;
     }
     if (op === 'stat') {

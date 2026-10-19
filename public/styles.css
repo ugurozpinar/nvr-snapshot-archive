@@ -690,3 +690,16 @@ dialog img {
     padding: 28px;
   }
 }
+
+.camera-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.camera-cell img {
+  width: 56px;
+  height: 34px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: #e0e8e5;
+}

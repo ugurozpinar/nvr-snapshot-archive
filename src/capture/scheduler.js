@@ -1,12 +1,13 @@
-const { randomUUID } = require('node:crypto');
 const { setTimeout: delay } = require('node:timers/promises');
 const { decryptSecret } = require('../security/secrets');
+const { canRecord } = require('../retention/capacity');
 function createScheduler({
   repos,
   config = {},
   client,
   store,
   history,
+  log = () => {},
   clock = { now: Date.now, sleep: (ms, signal) => delay(ms, null, { signal }) },
 }) {
   const due = new Map(),
@@ -19,24 +20,30 @@ function createScheduler({
     health = null;
   const now = () => clock.now();
   const abort = new AbortController();
-  async function record(camera) {
-    const job = history.beginCapture(camera, now());
+  const signatures = new Map(
+    repos.cameras.list({ limit: 10000 }).map((c) => [c.id, `${c.enabled}:${c.intervalMs}`]),
+  );
+  async function record({ camera, job }) {
     try {
       const settings = repos.settings.get('main') || {};
-      const used = settings.nasPath
-        ? repos.images.pendingStats().bytes
-        : repos.images.stats().bytes;
-      const quota = settings.nasPath ? settings.spoolQuotaBytes : settings.quotaBytes;
-      if (
-        !quota ||
-        used + (config.maxImageBytes || 20 * 1024 ** 2) > quota ||
-        (await store.localSpace()) <
-          (config.localReserveBytes || 256 * 1024 ** 2) + (config.maxImageBytes || 20 * 1024 ** 2)
-      ) {
+      const used = settings.nasPath ? repos.images.spoolBytes() : repos.images.stats().bytes;
+      const admission = canRecord({
+        settings,
+        spoolBytes: used,
+        archiveBytes: used,
+        localSpace: await store.localSpace(),
+        reserveBytes: config.localReserveBytes || 256 * 1024 ** 2,
+        imageBytes: config.maxImageBytes || 20 * 1024 ** 2,
+      });
+      if (!admission.allowed) {
         history.finishCapture(job, {
           status: 'skipped',
-          reason: !quota ? 'QUOTA_REQUIRED' : settings.nasPath ? 'SPOOL_FULL' : 'LOCAL_SPACE_LOW',
+          reason: admission.reason,
         });
+        const current = repos.cameras.get(camera.id);
+        if (current)
+          repos.cameras.save({ ...current, lastError: admission.reason, lastFailure: now() });
+        log('capture_skipped', { cameraId: camera.id, jobId: job, code: admission.reason });
         return;
       }
       const cameraNow = repos.cameras.get(camera.id);
@@ -72,18 +79,33 @@ function createScheduler({
       }
       const capturedAt = now();
       await store.persist({
-        id: randomUUID(),
+        id: job,
         cameraId: camera.id,
         capturedAt,
         buffer: result.buffer,
       });
       history.finishCapture(job, { status: 'success' });
+      log('snapshot_saved', { cameraId: camera.id, jobId: job });
       const current = repos.cameras.get(camera.id);
       if (current) repos.cameras.save({ ...current, lastSuccess: capturedAt, lastError: null });
     } catch (e) {
       const code = e.code || 'LOCAL_WRITE_FAILED';
       try {
-        history.finishCapture(job, { status: 'failed', reason: code });
+        const saved = repos.images.get(job);
+        if (saved) {
+          history.finishCapture(job, { status: 'success' });
+          const c = repos.cameras.get(camera.id);
+          if (c) repos.cameras.save({ ...c, lastSuccess: saved.capturedAt, lastError: null });
+          return;
+        }
+        log('capture_failed', { cameraId: camera.id, jobId: job, code });
+        if (!repos.jobs.get(`persist:${job}`))
+          history.finishCapture(job, { status: 'failed', reason: code });
+        else {
+          health = 'PERSISTENCE_RECOVERY_REQUIRED';
+          const intent = repos.jobs.get(job);
+          if (intent) repos.jobs.save({ ...intent, recoveryNeeded: true });
+        }
         const current = repos.cameras.get(camera.id);
         if (current) repos.cameras.save({ ...current, lastError: code, lastFailure: now() });
       } catch {
@@ -93,14 +115,14 @@ function createScheduler({
   }
   function pump() {
     while (!stopping && running.size < 4 && queue.length) {
-      const camera = queue.shift();
-      const p = record(camera)
+      const item = queue.shift();
+      const p = record(item)
         .catch(() => {
           health = 'DATABASE_UNHEALTHY';
         })
         .finally(() => {
           running.delete(p);
-          busy.delete(camera.id);
+          busy.delete(item.camera.id);
           pump();
         });
       running.add(p);
@@ -112,16 +134,19 @@ function createScheduler({
     try {
       for (const camera of repos.cameras.list({ enabled: true, limit: 10000 })) {
         const scheduled = due.get(camera.id) ?? now();
-        if (scheduled > now() || busy.has(camera.id)) continue;
-        if (now() - scheduled >= camera.intervalMs)
-          history.openPeriod(camera.id, 'SCHEDULE_SKIPPED', {
-            start: scheduled,
-            end: now(),
-            approximate: true,
-          });
-        due.set(camera.id, now() + (camera.intervalMs || 900000));
+        if (scheduled > now()) continue;
+        const interval = camera.intervalMs || 900000;
+        const missed = Math.floor((now() - scheduled) / interval) + (busy.has(camera.id) ? 1 : 0);
+        if (missed) history.recordSkipped({ ...camera, intervalMs: interval }, scheduled, missed);
+        const actualDue = scheduled + missed * interval;
+        const next = busy.has(camera.id) ? actualDue : actualDue + interval;
+        due.set(camera.id, next);
+        repos.cameras.save({ ...camera, nextDueAt: next });
+        signatures.set(camera.id, `${camera.enabled}:${camera.intervalMs}`);
+        if (busy.has(camera.id)) continue;
         busy.add(camera.id);
-        queue.push(camera);
+        const job = history.beginCapture(camera, actualDue);
+        queue.push({ camera, job });
       }
       pump();
     } catch {
@@ -146,12 +171,28 @@ function createScheduler({
       timer = setInterval(() => tick(), 1000);
     },
     refresh() {
-      for (const camera of repos.cameras.list({ limit: 10000 }))
-        due.set(camera.id, now() + (camera.intervalMs || 900000));
+      const ids = new Set();
+      for (const camera of repos.cameras.list({ limit: 10000 })) {
+        ids.add(camera.id);
+        const signature = `${camera.enabled}:${camera.intervalMs}`;
+        if (signatures.get(camera.id) !== signature) {
+          const next = signatures.has(camera.id) ? now() + (camera.intervalMs || 900000) : now();
+          due.set(camera.id, next);
+          repos.cameras.save({ ...camera, nextDueAt: next });
+        }
+        signatures.set(camera.id, signature);
+      }
+      for (const id of signatures.keys())
+        if (!ids.has(id)) {
+          signatures.delete(id);
+          due.delete(id);
+        }
     },
     async stop({ deadlineMs = 5000 } = {}) {
       stopping = true;
       clearInterval(timer);
+      for (const item of queue)
+        history.finishCapture(item.job, { status: 'skipped', reason: 'APPLICATION_SHUTDOWN' });
       queue = [];
       abort.abort();
       let id;

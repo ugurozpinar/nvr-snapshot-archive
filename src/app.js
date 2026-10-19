@@ -11,6 +11,7 @@ const { compactCamera } = require('./retention/compaction');
 const { recoverDeletes } = require('./retention/deletion');
 const { enforceCapacity } = require('./retention/capacity');
 const { createWebServer } = require('./web/server');
+const { createLogger } = require('./log');
 async function createApp(config = loadConfig(), overrides = {}) {
   for (const dir of [config.dataRoot, config.archiveRoot, config.spoolRoot, config.cacheRoot])
     await fs.mkdir(dir, { recursive: true, mode: 0o700 });
@@ -30,7 +31,8 @@ async function createApp(config = loadConfig(), overrides = {}) {
   history.recoverStartup();
   const nas = overrides.nas || createNasSupervisor(),
     client = overrides.client || require('./capture/nvr-client');
-  const deps = { repos, config, store, history, nas, client };
+  const log = overrides.log || createLogger();
+  const deps = { repos, config, store, history, nas, client, log };
   const scheduler = createScheduler(deps);
   deps.scheduler = scheduler;
   const web = createWebServer(deps);
@@ -39,8 +41,11 @@ async function createApp(config = loadConfig(), overrides = {}) {
     maintenance = null,
     stopped = false,
     backgroundError = null;
+  deps.runtimeStatus = () => ({ backgroundError });
   async function maintain() {
     if (stopped) return;
+    await store.reconcile();
+    history.recoverCaptures();
     const settings = repos.settings.get('main');
     if (settings?.nasPath) {
       try {
@@ -82,6 +87,7 @@ async function createApp(config = loadConfig(), overrides = {}) {
     maintenance = maintain()
       .catch((e) => {
         backgroundError = e.code || 'MAINTENANCE_FAILED';
+        log('maintenance_failed', { code: backgroundError });
       })
       .finally(() => {
         maintenance = null;

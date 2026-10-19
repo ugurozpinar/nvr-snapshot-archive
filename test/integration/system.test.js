@@ -17,14 +17,14 @@ test('application composes capture, durable local archive and restart recovery',
       intervalMs: 900000,
     });
   const client = { captureSnapshot: async () => ({ buffer }) };
-  const app = await createApp(ctx.config, { client });
+  const app = await createApp(ctx.config, { client, log: () => {} });
   await app.start();
   await app.scheduler.drain();
   assert.equal(app.repos.images.stats().count, 90);
   const response = await fetch(`http://127.0.0.1:${app.address().port}/api/session`);
   assert.equal(response.status, 200);
   await app.stop();
-  const second = await createApp(ctx.config, { client });
+  const second = await createApp(ctx.config, { client, log: () => {} });
   assert.equal(second.repos.images.stats().count, 90);
   await second.stop();
 });

@@ -16,8 +16,23 @@ function safePath(root, relative) {
   if (!resolved.startsWith(path.resolve(root) + path.sep)) throw error('INVALID_PATH');
   return resolved;
 }
+async function durableMkdir(dir) {
+  const first = await fs.mkdir(dir, { recursive: true, mode: 0o700 });
+  if (first && process.platform !== 'win32') {
+    let current = dir;
+    const boundary = path.dirname(first);
+    while (current !== boundary) {
+      await syncDir(current);
+      const parent = path.dirname(current);
+      if (parent === current) throw error('DIRECTORY_SYNC_BOUNDARY');
+      current = parent;
+    }
+    await syncDir(boundary);
+  }
+}
 function createLocalStore({ repos, config }) {
   const active = new Set();
+  const writing = new Set();
   async function localSpace() {
     await fs.mkdir(config.dataRoot, { recursive: true });
     const s = await fs.statfs(config.dataRoot);
@@ -29,12 +44,6 @@ function createLocalStore({ repos, config }) {
     const exists = repos.images.get(id);
     if (exists) return exists;
     const settings = repos.settings.get('main') || {};
-    const used = settings.nasPath ? repos.images.pendingStats().bytes : repos.images.stats().bytes;
-    const quota = settings.nasPath ? settings.spoolQuotaBytes : settings.quotaBytes;
-    if (!quota || used + buffer.length > quota)
-      throw error(settings.nasPath ? 'SPOOL_FULL' : 'ARCHIVE_FULL');
-    if ((await localSpace()) < config.localReserveBytes + buffer.length)
-      throw error('LOCAL_SPACE_LOW');
     const date = new Date(capturedAt).toISOString();
     const relativePath = path.join(
       cameraId,
@@ -59,22 +68,47 @@ function createLocalStore({ repos, config }) {
       state: settings.nasPath ? 'pending' : 'local',
       availability: 'available',
     };
-    repos.jobs.save({ id: `persist:${id}`, kind: 'persist', image, temp });
-    await fs.mkdir(path.dirname(localPath), { recursive: true });
-    const handle = await fs.open(temp, 'w', 0o600);
+    // The durable intent reserves quota synchronously, before the first filesystem await.
+    repos.db
+      .transaction(() => {
+        const used = settings.nasPath ? repos.images.spoolBytes() : repos.images.stats().bytes;
+        const quota = settings.nasPath ? settings.spoolQuotaBytes : settings.quotaBytes;
+        if (repos.jobs.get(`persist:${id}`)) throw error('PERSISTENCE_PENDING');
+        if (!quota || used + repos.jobs.reservedBytes(!!settings.nasPath) + buffer.length > quota)
+          throw error(settings.nasPath ? 'SPOOL_FULL' : 'ARCHIVE_FULL');
+        repos.jobs.save({ id: `persist:${id}`, kind: 'persist', image, temp });
+      })
+      .immediate();
+    let renamed = false;
+    writing.add(id);
     try {
-      await handle.writeFile(buffer);
-      await handle.sync();
+      if ((await localSpace()) < config.localReserveBytes + repos.jobs.reservedBytes())
+        throw error('LOCAL_SPACE_LOW');
+      await durableMkdir(path.dirname(localPath));
+      const handle = await fs.open(temp, 'wx', 0o600);
+      try {
+        await handle.writeFile(buffer);
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+      await fs.rename(temp, localPath);
+      renamed = true;
+      await syncDir(path.dirname(localPath));
+      repos.transaction(() => {
+        repos.images.save(image);
+        repos.jobs.remove(`persist:${id}`);
+      });
+      return image;
+    } catch (e) {
+      if (!renamed) {
+        await fs.rm(temp, { force: true });
+        repos.jobs.remove(`persist:${id}`);
+      }
+      throw e;
     } finally {
-      await handle.close();
+      writing.delete(id);
     }
-    await fs.rename(temp, localPath);
-    await syncDir(path.dirname(localPath));
-    repos.transaction(() => {
-      repos.images.save(image);
-      repos.jobs.remove(`persist:${id}`);
-    });
-    return image;
   }
   async function read(id) {
     const image = repos.images.get(id);
@@ -92,6 +126,7 @@ function createLocalStore({ repos, config }) {
   async function reconcile() {
     for (const job of repos.jobs.list({ kind: 'persist', limit: 10000 })) {
       const image = job.image;
+      if (writing.has(image.id)) continue;
       let buffer = await fs.readFile(image.localPath).catch((e) => {
         if (e.code === 'ENOENT') return null;
         throw e;
@@ -121,6 +156,7 @@ function createLocalStore({ repos, config }) {
     // Transferred state was committed before unlink. Finish cleanup after a crash.
     for (const image of repos.images.list({ state: 'transferred', limit: 10000 }))
       if (image.localPath) {
+        if (active.has(image.id)) continue;
         await fs.rm(image.localPath, { force: true });
         repos.images.save({ ...image, localPath: null });
       }
@@ -136,4 +172,4 @@ function createLocalStore({ repos, config }) {
   }
   return { persist, read, reconcile, localSpace, withLease, active };
 }
-module.exports = { createLocalStore, safePath, syncDir };
+module.exports = { createLocalStore, safePath, syncDir, durableMkdir };

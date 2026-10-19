@@ -5,11 +5,32 @@ const { error } = require('../errors');
 function createNasSupervisor({ spawn, timeoutMs = 30000, retryMs = 15000 } = {}) {
   let child = null,
     pending = null,
-    unhealthy = false,
     stuck = false,
-    nextAttempt = 0,
     stopped = false,
-    lastVerified = null;
+    healthy = false,
+    lastVerified = null,
+    lastError = null,
+    nextAttempt = 0;
+  const queue = [];
+  function rejectQueue() {
+    for (const task of queue.splice(0)) {
+      clearTimeout(task.timer);
+      task.reject(error('NAS_UNAVAILABLE'));
+    }
+  }
+  function fail() {
+    healthy = false;
+    lastError = 'NAS_UNAVAILABLE';
+    stuck = !!child;
+    nextAttempt = Date.now() + retryMs;
+    if (pending) {
+      clearTimeout(pending.timer);
+      pending.reject(error('NAS_UNAVAILABLE'));
+      pending = null;
+    }
+    rejectQueue();
+    child?.kill('SIGTERM');
+  }
   function ensureChild() {
     if (child) return;
     child = spawn
@@ -20,65 +41,96 @@ function createNasSupervisor({ spawn, timeoutMs = 30000, retryMs = 15000 } = {})
           windowsHide: true,
         });
     child.on('message', (message) => {
-      if (!pending || message.id !== pending.id || unhealthy) return;
-      const p = pending;
+      if (!pending || message.id !== pending.id || stuck) return;
+      const task = pending;
       pending = null;
-      clearTimeout(p.timer);
+      clearTimeout(task.timer);
       if (message.error) {
-        p.reject(error(message.error));
-        return;
+        healthy = message.error === 'NAS_SPACE_LOW';
+        if (healthy) lastVerified = Date.now();
+        lastError = message.error;
+        task.reject(error(message.error));
+        if (
+          !['NAS_BUSY', 'ENOENT', 'NAS_HEALTH_REQUIRED', 'NAS_SPACE_LOW', 'EEXIST'].includes(
+            message.error,
+          )
+        ) {
+          nextAttempt = Date.now() + retryMs;
+          rejectQueue();
+        }
+      } else {
+        healthy = true;
+        lastError = null;
+        lastVerified = Date.now();
+        task.resolve(message.result);
       }
-      lastVerified = Date.now();
-      p.resolve(message.result);
+      pump();
     });
     child.on('exit', () => {
       child = null;
       stuck = false;
+      healthy = false;
+      lastError = 'NAS_UNAVAILABLE';
       if (pending) {
         clearTimeout(pending.timer);
         pending.reject(error('NAS_UNAVAILABLE'));
         pending = null;
       }
+      rejectQueue();
       nextAttempt = Date.now() + retryMs;
     });
-    child.on('error', () => fail());
+    child.on('error', fail);
   }
-  function fail() {
-    unhealthy = true;
-    stuck = !!child;
-    nextAttempt = Date.now() + retryMs;
-    if (pending) {
-      clearTimeout(pending.timer);
-      pending.reject(error('NAS_UNAVAILABLE'));
-      pending = null;
+  function pump() {
+    if (pending || stuck || stopped || !queue.length) return;
+    const task = queue.shift();
+    if (Date.now() < nextAttempt && !['health', 'initialize'].includes(task.op)) {
+      clearTimeout(task.timer);
+      task.reject(error('NAS_UNAVAILABLE'));
+      pump();
+      return;
     }
-    child?.kill('SIGTERM');
+    try {
+      ensureChild();
+      pending = task;
+      child.send({ id: task.id, op: task.op, payload: task.payload }, (e) => {
+        if (e) fail();
+      });
+    } catch {
+      fail();
+    }
   }
   function request(op, payload) {
-    if (stopped || (unhealthy && child) || Date.now() < nextAttempt)
+    if (
+      stopped ||
+      (stuck && child) ||
+      (Date.now() < nextAttempt && !['health', 'initialize'].includes(op))
+    )
       return Promise.reject(error('NAS_UNAVAILABLE'));
-    if (pending) return Promise.reject(error('NAS_BUSY'));
-    unhealthy = false;
-    ensureChild();
-    const id = randomUUID();
+    if (queue.length >= 64) return Promise.reject(error('NAS_BUSY'));
     return new Promise((resolve, reject) => {
-      pending = { id, resolve, reject, timer: setTimeout(fail, timeoutMs) };
-      try {
-        child.send({ id, op, payload }, (err) => {
-          if (err) fail();
-        });
-      } catch {
-        fail();
-      }
+      const task = { id: randomUUID(), op, payload, resolve, reject };
+      task.timer = setTimeout(() => {
+        if (pending === task) fail();
+        else {
+          const index = queue.indexOf(task);
+          if (index >= 0) queue.splice(index, 1);
+          reject(error('NAS_BUSY'));
+        }
+      }, timeoutMs);
+      queue.push(task);
+      pump();
     });
   }
   return {
     request,
     status: () => ({
-      available: !unhealthy && lastVerified != null,
+      available: healthy && !stuck && !stopped,
       stuck,
       busy: !!pending,
+      queued: queue.length,
       lastVerified,
+      lastError,
       nextAttempt,
     }),
     stop() {

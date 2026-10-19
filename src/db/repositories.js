@@ -67,7 +67,7 @@ function createRepositories(db) {
   repos.images.stats = () =>
     db
       .prepare(
-        "SELECT count(*) count, coalesce(sum(json_extract(data,'$.bytes')),0) bytes, min(json_extract(data,'$.capturedAt')) oldest, max(json_extract(data,'$.capturedAt')) newest FROM images",
+        "SELECT count(*) count, coalesce(sum(CASE WHEN json_extract(data,'$.availability')='missing' THEN 0 ELSE json_extract(data,'$.bytes') END),0) bytes, coalesce(sum(json_extract(data,'$.bytes')),0) knownBytes, min(CASE WHEN json_extract(data,'$.availability')!='missing' THEN json_extract(data,'$.capturedAt') END) oldest, max(CASE WHEN json_extract(data,'$.availability')!='missing' THEN json_extract(data,'$.capturedAt') END) newest FROM images",
       )
       .get();
   repos.images.pendingStats = () =>
@@ -76,6 +76,27 @@ function createRepositories(db) {
         "SELECT count(*) count, coalesce(sum(json_extract(data,'$.bytes')),0) bytes FROM images WHERE json_extract(data,'$.state')='pending'",
       )
       .get();
+  repos.images.spoolBytes = () =>
+    repos.db
+      .prepare(
+        "SELECT coalesce(sum(json_extract(data,'$.bytes')),0) bytes FROM images WHERE json_extract(data,'$.state')='pending' OR (json_extract(data,'$.state')='transferred' AND json_extract(data,'$.localPath') IS NOT NULL)",
+      )
+      .get().bytes;
+  repos.jobs.reservedBytes = (pendingOnly = false) =>
+    repos.db
+      .prepare(
+        "SELECT coalesce(sum(json_extract(j.data,'$.image.bytes')),0) bytes FROM jobs j WHERE json_extract(j.data,'$.kind')='persist' AND NOT EXISTS (SELECT 1 FROM images i WHERE i.id=json_extract(j.data,'$.image.id'))" +
+          (pendingOnly ? " AND json_extract(j.data,'$.image.state')='pending'" : ''),
+      )
+      .get().bytes;
+  repos.history.openPeriods = (scope, reason = null) =>
+    repos.db
+      .prepare(
+        "SELECT data FROM history WHERE json_extract(data,'$.kind')='period' AND json_extract(data,'$.scope')=? AND json_extract(data,'$.end') IS NULL" +
+          (reason ? " AND json_extract(data,'$.reason')=?" : ''),
+      )
+      .all(...(reason ? [scope, reason] : [scope]))
+      .map((r) => JSON.parse(r.data));
   repos.history.between = (scope, from, to) =>
     db
       .prepare(

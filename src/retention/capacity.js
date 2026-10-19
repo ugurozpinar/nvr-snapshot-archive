@@ -56,6 +56,10 @@ function storageStats({ repos, clock = { now: Date.now } }) {
     estimatedDays: dailyBytes ? settings.quotaBytes / dailyBytes : null,
     estimateKind: 'approximate-before-compaction',
     compactionEnabled: !!settings.compactionEnabled,
+    nasFreeBytes: repos.settings.get('nas-health')?.freeBytes ?? null,
+    nasMeasuredAt: repos.settings.get('nas-health')?.verifiedAt ?? null,
+    localSpoolBytes: repos.images.spoolBytes(),
+    reservedBytes: repos.jobs.reservedBytes(),
   };
 }
 module.exports = { enforceCapacity, storageStats, canRecord };

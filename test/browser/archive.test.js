@@ -8,6 +8,7 @@ test('administrator browses archive, explains gaps and configures masks and inte
   await page.getByRole('button', { name: 'Yöneticiyi oluştur' }).click();
   await expect(page.getByRole('heading', { name: 'Arşivin nabzı' })).toBeVisible();
   await expect(page.getByTestId('camera-count')).toHaveText('90');
+  await expect(page.locator('#camera-table img')).toHaveCount(1);
   await page.getByRole('button', { name: 'Arşiv', exact: true }).click();
   await page.getByRole('combobox', { name: 'Kamera', exact: true }).selectOption('cam0');
   await page.getByLabel('Tarih', { exact: true }).fill('2026-10-19');
