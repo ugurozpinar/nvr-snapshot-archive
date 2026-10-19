@@ -64,6 +64,11 @@ function createRepositories(db) {
       },
     };
   }
+  const recentImages = db.prepare(
+    "SELECT data FROM images WHERE json_extract(data,'$.cameraId')=? ORDER BY json_extract(data,'$.capturedAt') DESC,id DESC LIMIT ?",
+  );
+  repos.images.recent = (cameraId, limit = 20) =>
+    recentImages.all(cameraId, limit).map((row) => JSON.parse(row.data));
   repos.images.stats = () =>
     db
       .prepare(

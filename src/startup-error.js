@@ -1,6 +1,7 @@
 // Only fixed messages go into startup logs; upstream error messages may contain credentials.
 function startupFailure(error) {
   const messages = {
+    INVALID_PORT: '.env PORT must be an integer between 0 and 65535.',
     INVALID_ARCHIVE_KEY:
       '.env içindeki ARCHIVE_KEY, 64 hexadecimal karakterden (0-9, a-f) oluşmalıdır. Rastgele 32 baytlık anahtar üretin; mevcut şifreli veriler varsa eski geçerli anahtarı koruyun.',
     EADDRINUSE:

@@ -1,81 +1,99 @@
-# Kare — Kamera Arşivi
+# Kare: NVR snapshot archive
 
-İki NVR ve yaklaşık 90 kameradan düzenli snapshot alan, kapasite sınırına göre arşivleyen ve yerel ağdaki tek yöneticiye web arayüzü sunan Node.js uygulaması.
+**Save scheduled JPEG snapshots from a compatible NVR. Browse by camera and date, control storage, and inspect gaps in the archive.**
 
-- Varsayılan 15 dakika; kamera bazında çekim aralığı.
-- Geçerli JPEG kontrolü, dört eşzamanlı çekim, sınırlı tekrar deneme.
-- NAS tanımlı değilse proje içindeki `archive/`; tanımlıysa önce yerel tampon, ardından doğrulanmış NAS aktarımı.
-- İlk yedi gün tam saklama; daha eski benzer görüntülerde maskeli sadeleştirme ve varsayılan saatlik koruma.
-- Kapasite %95'e ulaştığında %90'a kadar en eski görüntüleri temizleme. Bu politika yedi günlük ve saatlik korumayı aşabilir.
-- Kamera/tarih filtreleri, önizleme, indirme, kalıcı günlük özetler ve boşluk nedenleri.
+For developers and Linux operators who want a periodic photo history alongside an existing NVR. Kare is a self-hosted Node.js application with local storage and optional transfer to a mounted NAS; captures are saved locally before transfer.
 
-## Gereksinimler ve çalıştırma
+- **Keep a bounded archive:** per-camera schedules, a storage quota, and optional comparison masks for thinning older similar images.
+- **Understand missing coverage:** daily summaries and recorded failure periods remain after images are removed.
+- **Try the browser without hardware:** the fixture below includes synthetic images and an example outage.
 
-Linux üzerinde Node.js 22.12 veya üstü desteklenen LTS gerekir. NAS, işletim sistemi tarafından önceden bağlanır; uygulama mount yapmaz. Süreç yönetimi dışarıdan sağlanır; startup/PM2 kurulumu bu projenin kapsamı dışındadır.
+**Early-stage software.** The adapter currently uses `/cgi-bin/snapshot.cgi?channel=N` with HTTP Digest (MD5). There is no ONVIF discovery or generic camera adapter. The UI is in Turkish. Real NVR/Linux/NAS acceptance and throughput are not yet verified.
+
+## Try it without a camera
+
+Use Node.js **22.13+ on the 22 or 24 LTS line**, npm, and Git. Production targets Linux; this fixture also runs on Windows. Native dependencies (`better-sqlite3`, `argon2`, `sharp`) may need a compiler toolchain if prebuilt binaries are unavailable.
 
 ```sh
+git clone https://github.com/ugurozpinar/onvif-snapshot.git
+cd onvif-snapshot
 npm ci
-cp .env.example .env
+node test/helpers/browser-server.js
 ```
 
-İki bağımsız rastgele değer üretip `.env` içine yazın. Örneğin her değer için `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"` kullanılabilir:
+Open [http://127.0.0.1:3099](http://127.0.0.1:3099). Enter `browser-token` in **Kurulum anahtarı**, choose a password of at least 12 characters in **Yönetici parolası**, then click **Yöneticiyi oluştur**.
 
-```dotenv
-ARCHIVE_KEY=<64-hex-karakter>
-SETUP_TOKEN=<ayri-rastgele-kurulum-anahtari>
-HOST=0.0.0.0
-PORT=3080
-```
+1. Open **Arşiv**, choose **Ana giriş**, and set **Tarih** to `2026-10-19`.
+2. Click **Görüntüleri getir**. Expect four synthetic, solid-color images; click one to preview or download it.
+3. The same view includes **NVR erişim hatası**, an example recorded outage.
 
-`npm start` ile çalıştırın, yerel ağdan `http://<bilgisayar-adresi>:3080` adresini açın. Varsayılan HOST yalnızca `127.0.0.1` dinler; `0.0.0.0` yerel ağ erişimini açar. İnternet yayını kapsam dışındadır.
+This is the existing browser-test fixture: 90 camera records, four generated JPEGs, no running capture scheduler and no real NVR/NAS connections. It uses a fresh OS temporary directory on every launch, ignores `.env`, and listens only on loopback. Stop with Ctrl+C; graceful shutdown removes the fixture data. An interrupted process may leave its temporary directory behind. Restarting creates a new setup. Do not use these fixed demo credentials for deployment.
 
-İlk ekranda `SETUP_TOKEN` ve en az 12 karakterlik yönetici parolasıyla yöneticiyi oluşturun. Sonraki girişlerde yalnızca parola gerekir. İlk kurulum tek seferliktir; oturumlar sekiz saat sonra ve uygulama yeniden başladığında sona erer.
-
-**Ayarlar** üzerinden kapasiteyi, NVR'leri ve kullanılan kanalları ekleyin. Varsayılan boş kurulum cihazlara bağlanmaz. Kapasite belirlenmeden çekim başlamaz. NVR parolaları `ARCHIVE_KEY` ile şifrelenir ve arayüzden geri okunamaz. Anahtar sonradan değiştirilirse mevcut NVR sırları çözülemez; anahtarı güvenle saklayın.
-
-## Depolama
-
-- `archive/<kamera-id>/YYYY/MM/DD/<UTC-zamanı>_<id>.jpg`: NAS yokken özgün arşiv.
-- `data/catalog.sqlite`: yerel SQLite katalog, ayarlar ve kalıcı geçmiş.
-- `data/spool/`: NAS'a aktarım bekleyen tek yerel kopyalar.
-- `data/cache/`: en fazla 128 MiB yeniden üretilebilir önizleme önbelleği.
-
-`DATA_DIR` ile `data/` konumu değiştirilebilir; **daima yerel diskte** olmalıdır. Yerel dosya sisteminde en az 256 MiB rezerv bırakılır; planlanan çekim için ayrıca en fazla 20 MiB görüntü payı aranır. Tampon kotası dolunca mevcut dosyalar korunur, yeni çekimler geçmişte açıklanarak atlanır. Başarılı yerel kayıt ile tamamlanmış NAS aktarımı ayrı durumlardır.
-
-NAS için arşiv yolu, beklenen mount noktası/kaynağı, benzersiz depo kimliği ve tampon kotası girilir. Depo dizinini önceden oluşturun; ayarları kaydettikten sonra **NAS depo kimliğini oluştur** düğmesi doğru mount üzerinde kimlik dosyasını bir kez oluşturur. Mevcut kimlik üzerine yazılmaz. Katalogda görüntü varken depo değişikliği reddedilir; otomatik depo taşıma veya eski betiğin arşivini içe aktarma yoktur.
-
-Tüm NAS dosya çağrıları ayrı süreçtedir. 30 saniyede yanıt alınamazsa ana uygulama beklemeyi bırakır. Yardımcı süreç kernel I/O içinde takılırsa yeni süreçler çoğaltılmaz; yerel disk ve tampon müsaitken çekim sürer. NAS'a erişilemiyor olması dosyanın kaybolduğu anlamına gelmez. Doğru depoda iki ayrı başarılı kontrolde yokluğu doğrulanan görüntü kayıp işaretlenir; katalog kaydı korunur.
-
-NAS'ın paylaşılan dosya sisteminde 256 MiB rezerv ve aktarılacak görüntü kadar boş alan yoksa aktarım durur; özgün yerel kopya korunur. Son boş alan ölçümünün zamanı durum ekranında gösterilir. Doğrulanmış kayıp dosyanın eski boyutu katalogda kalır; fiziksel arşiv kota hesabına dahil edilmez. Erişilemeyen dosyalar ise kota hesabından çıkarılmaz.
-
-## Sadeleştirme ve geçmiş
-
-Özgün fotoğraf değiştirilmez. Kamera ekranında tarih/saat ve istenmeyen hareketli alanları dikdörtgenlerle dışlayın; görüntü üzerinde çizim veya yüzde koordinatları kullanılabilir. Aynı kameranın saklanmış iki görüntüsünü karşılaştırma önizlemesinde deneyin. Gündüz/gece örnekleri doğrulanmadan kamera sadeleştirmesini açmayın; varsayılan kapalıdır.
+To exercise capture and restart recovery without hardware as well:
 
 ```sh
-npm run calibrate -- first.jpg second.jpg masks.json
+node --test --test-timeout=60000 test/integration/system.test.js test/integration/nvr-client.test.js
 ```
 
-`masks.json` örneği: `[{"x":0.65,"y":0,"width":0.35,"height":0.1}]`. Son korunan görüntü referanstır; küçük biriken değişiklikler böylece kaybolmaz. Analiz hatası ve çözünürlük değişiminde görüntü korunur. Maske/hassasiyet/koruma aralığı değişince kamera yeniden doğrulanmalıdır. Silme geri alınamaz; snapshot'lar çekimler arasındaki olayları gösterme garantisi vermez.
+The system test saves 90 generated snapshots and reopens their catalog. The adapter test uses a local HTTP challenge fixture. These are functional checks, not camera benchmarks or a full device authentication certification.
 
-Tarih/saat tüm kameralarda aynı konumdaysa **Alanları tüm kameralara kopyala** düğmesi ekranda çizili alanları kaynak dahil tüm kameralara kaydeder. Önceden ayrıca kaydetmek gerekmez. Mevcut alanlar değiştirilir; diğer kamera ayarları korunur. Yalnızca alanları değişen kameraların karşılaştırma doğrulaması sıfırlanır. Alan çizilmediyse düğme pasiftir.
+## Use it with your NVR
 
-Tek tek benzer silinen karelerin kaydı tutulmaz. Kamera/gün özetleri, politika sürümleri ve hata dönemleri kalıcıdır; uygulama kesintileri yaşam işaretinden yaklaşık belirlenir. Veri yoksa neden bilinmiyor olarak kalır. Özetler görüntü kotasıyla silinmez. Yerel veritabanı ve anahtarın yedeğini ayrıca alın; tek yerel diskin kaybına karşı ikinci kopya bu uygulamada otomatik oluşturulmaz.
+Example workflow: keep one entrance image every 15 minutes, browse a selected day's photos, and inspect recorded errors when coverage is missing. This is an intended use supported by the code, not a customer deployment claim. Snapshots cannot show events between captures.
 
-Kamera aralığı değişikliği diğer kameraların takvimini ertelemez. Geciken ve çalışılmayan periyotlar ilgili günün atlanan çekim sayısına yazılır; ani kesintinin sınırları yaklaşık gösterilir. Çekim, yerel kalıcı dosya ve geçmiş kaydı aynı iş kimliğiyle toparlanır. Sadeleştirme ayarı değişirse henüz başlamamış silmeler eski politikayla devam etmez; dosya sistemine zaten gönderilmiş bir silme geri alınamaz.
-
-Uygulama tek süreç/tek örnek olarak aynı `DATA_DIR` üzerinde çalıştırılmalıdır. NVR ve arşiv hataları kimliklerle yapılandırılmış stdout olaylarına yazılır; aynı kamera/neden için tekrarlanan olaylar dakika içinde birleştirilir. Teknik loglar kalıcı arşiv geçmişinin yerine geçmez.
-
-## Geliştirme ve doğrulama
+In the cloned directory, after `npm ci`, create `.env` with two independent random values. This command works in a shell with Node available and refuses to overwrite an existing `.env`:
 
 ```sh
-npm test
+node -e "const fs=require('node:fs'),c=require('node:crypto');fs.writeFileSync('.env','ARCHIVE_KEY='+c.randomBytes(32).toString('hex')+'\nSETUP_TOKEN='+c.randomBytes(32).toString('hex')+'\nHOST=127.0.0.1\nPORT=3080\n',{flag:'wx',mode:0o600})"
+npm start
+```
+
+Open [http://127.0.0.1:3080](http://127.0.0.1:3080). Read `SETUP_TOKEN` from your local `.env` and create the administrator with a new password of at least 12 characters. Keep `ARCHIVE_KEY`: changing it makes stored NVR passwords unreadable.
+
+If startup reports `EADDRINUSE`, choose a free `PORT` in `.env` and open that port instead. An existing `PORT` environment variable takes precedence over `.env`. The demo uses port 3099; stop another demo or browser-test server before starting it.
+
+In **Ayarlar**:
+
+1. Set the archive capacity before enabling capture. Start with local storage and compaction disabled.
+2. Add your NVR host, username and password. It must serve JPEGs from the endpoint above; ONVIF support alone is insufficient. The connection test defaults to channel 1.
+3. Add the channels you actually use. The default interval is 15 minutes. Check **Genel durum** for capture success, then **Arşiv** for the camera and capture date.
+
+No cameras or device credentials ship with a normal installation. Local images go into `archive/`; catalog, settings and spool go into `data/`. Keep `DATA_DIR` on local disk and run only one application instance per data directory. LAN access requires changing `HOST`; internet deployment is outside the current scope.
+
+For NAS setup, comparison masks, retention details, backups and shutdown behavior, read the [operations guide (Turkish)](docs/operations.md). Before relying on real hardware, complete the [device acceptance checklist](docs/acceptance.md).
+
+## Choose the right tool
+
+| Need                                                              | Start here                                                                                |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Periodic still-image history alongside an existing compatible NVR | Kare: local persistence, optional verified NAS transfer, quota and gap history in one app |
+| Live object detection and video recording                         | [Frigate](https://github.com/blakeblackshear/frigate)                                     |
+| A broader Linux surveillance system                               | [ZoneMinder](https://github.com/ZoneMinder/zoneminder)                                    |
+| ONVIF discovery, PTZ or a camera integration library              | [agsh/onvif](https://github.com/agsh/onvif)                                               |
+
+Kare's case is the combined archive workflow. There is no measured claim that it is faster, smaller or more reliable than these alternatives. For one camera and a folder of JPEGs, a scheduled script may be enough.
+
+## Know the limits before keeping images
+
+- Capacity cleanup starts at 95% of the configured archive quota and targets 90%; it can override the seven-day and hourly retention protections. Deletion is irreversible.
+- Similar-image thinning is disabled by default. Validate masks and day/night samples before enabling it. Comparison masks affect analysis, **not privacy redaction**: original images remain unchanged.
+- NAS outages can be buffered only while local space and spool quota permit; otherwise new captures are skipped. A transferred image is not an automatic second backup.
+- Gap summaries are aggregate records. Startup outage boundaries are approximate; an unknown cause stays unknown.
+- The 90-camera fixture is not evidence of real-device capacity. No real hardware compatibility matrix or storage savings measurements are available yet.
+- Back up the local database and encryption key separately. There is no automatic replica, archive migration or import from the old script.
+
+## Help make the next claim verifiable
+
+The most useful contribution now is a sanitized hardware acceptance report: NVR model/firmware, Linux and Node versions, channel behavior, and observed results from the [checklist](docs/acceptance.md). Never attach camera credentials or private images.
+
+For a bug, include the commit, reproduction steps, expected/actual behavior and redacted error codes in a [GitHub issue](https://github.com/ugurozpinar/onvif-snapshot/issues). Small documentation corrections and reproducible fixes are welcome; discuss new device adapters before building them. See [CONTRIBUTING.md](CONTRIBUTING.md) for checks and [the architecture map](docs/architecture.md) for entry points. No response-time commitment is promised.
+
+```sh
+npm run check
 npx playwright install chromium
 npm run test:browser
 ```
 
-Testler geçici yerel dizinler ve sahte NVR kullanır; cihazlara veya mevcut arşive erişmez. Gerçek Linux, NVR ve NAS kabulü için [kontrol listesi](docs/acceptance.md) kullanılır. HTTP `/cgi-bin/snapshot.cgi` ve Digest kimlik doğrulaması hedeflenir; ONVIF keşfi ve genel üretici uyumluluğu uygulanmamıştır.
+Tests use temporary directories and synthetic inputs. Configured CI and local results do not replace real hardware acceptance. See the [positioning and verification record](docs/repository-review.md).
 
-[Tasarım](docs/superpowers/specs/2026-10-19-camera-archive-design.md) · [Uygulama planı](docs/superpowers/plans/2026-10-19-camera-archive.md)
-
-Lisans notu: Mevcut paket metadatası ISC'dir; eski README MIT belirtiyordu ve repoda lisans dosyası yoktu. Bu geliştirme lisans seçimini değiştirmez; dağıtım için sahibinin lisansı netleştirmesi gerekir.
+**License status:** package metadata says ISC, the historical README said MIT, and no license file is present. The owner needs to resolve this before presenting a clear open-source license grant; this documentation does not choose a license on their behalf.

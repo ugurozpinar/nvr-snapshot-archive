@@ -3,6 +3,55 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { context } = require('../helpers/context');
+const { migrate } = require('../../src/db/migrate');
+
+test('migrations run in numeric order once and roll back failed schema changes', (t) => {
+  const { db, dir } = context(t);
+  const migrations = path.join(dir, 'migrations');
+  fs.mkdirSync(migrations);
+  fs.writeFileSync(
+    path.join(migrations, '002-example.sql'),
+    'CREATE TABLE example(value INTEGER); INSERT INTO example VALUES(1);',
+  );
+  fs.writeFileSync(path.join(migrations, '010-update.sql'), 'UPDATE example SET value=value+1;');
+  migrate(db, migrations);
+  migrate(db, migrations);
+  assert.equal(db.prepare('SELECT value FROM example').get().value, 2);
+  fs.writeFileSync(
+    path.join(migrations, '011-failure.sql'),
+    'CREATE TABLE partial(value INTEGER); INSERT INTO nonexistent VALUES(1);',
+  );
+  assert.throws(() => migrate(db, migrations));
+  assert.equal(db.prepare("SELECT name FROM sqlite_master WHERE name='partial'").get(), undefined);
+  assert.equal(db.prepare('SELECT version FROM schema_versions WHERE version=11').get(), undefined);
+  fs.writeFileSync(
+    path.join(migrations, '011-failure.sql'),
+    'CREATE TABLE partial(value INTEGER);',
+  );
+  migrate(db, migrations);
+  assert.equal(
+    db.prepare('SELECT version FROM schema_versions WHERE version=11').get().version,
+    11,
+  );
+});
+
+test('recent image queries isolate cameras and resolve timestamp ties deterministically', (t) => {
+  const { repos } = context(t);
+  for (const image of [
+    { id: 'a', cameraId: 'one', capturedAt: 100 },
+    { id: 'b', cameraId: 'one', capturedAt: 100 },
+    { id: 'c', cameraId: 'two', capturedAt: 200 },
+    { id: 'd', cameraId: 'one', capturedAt: 50 },
+  ])
+    repos.images.save(image);
+  assert.deepEqual(
+    repos.images.recent('one', 2).map((image) => image.id),
+    ['b', 'a'],
+  );
+  assert.deepEqual(repos.images.recent('missing'), []);
+  assert.equal(repos.images.recent('two')[0].id, 'c');
+});
 test('catalog persists settings and rolls back transactions', () => {
   const { openDatabase } = require('../../src/db/open');
   const { createRepositories } = require('../../src/db/repositories');

@@ -4,7 +4,7 @@ Bu kontroller otomatik testlerin yerine geçmez. Gerçek NVR/NAS erişimi olmada
 
 ## Ortam
 
-- Linux, Node.js 22.12 veya üstü desteklenen LTS; `npm ci` başarılı.
+- Linux, Node.js 22.13 veya üstü desteklenen LTS; `npm ci` başarılı.
 - `DATA_DIR`, SQLite, tampon ve önizleme önbelleği yerel diskte. Yerel kayıt diski sağlıklı ve yeterli boş alana sahip.
 - NAS mevcutsa Linux tarafından önceden bağlanmış; uygulama mount yapmaz. Mount kaynağı ve noktası `/proc/self/mountinfo` değerleriyle uyuşmalı; NAS arşiv dizini önceden oluşturulmuş olmalı.
 - Uygulama hesabı yerel durum dizinlerine ve seçilen NAS alt dizinine erişebiliyor; NAS yolu symlink içermiyor.

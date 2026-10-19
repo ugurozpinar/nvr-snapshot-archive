@@ -1,0 +1,9 @@
+node_modules/
+archive/
+data/
+arc/
+coverage/
+test-results/
+playwright-report/
+package-lock.json
+docs/superpowers/

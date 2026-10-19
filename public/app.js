@@ -5,7 +5,7 @@ let csrf = '',
   setupRequired = false,
   cameras = [],
   nvrs = [],
-  frames = [],
+  archiveFrames = [],
   cursor = null,
   viewerIndex = 0,
   currentMasks = [],
@@ -258,8 +258,8 @@ async function loadFrames(more = false) {
   if (!query.get('cameraId')) throw Error('Önce bir kamera ekleyin');
   if (more && cursor) query.set('cursor', cursor);
   const data = await api('/api/images?' + query);
-  if (!more) frames = [];
-  frames.push(...data.items);
+  if (!more) archiveFrames = [];
+  archiveFrames.push(...data.items);
   cursor = data.nextCursor;
   renderFrames();
   if (!more) {
@@ -278,7 +278,7 @@ function stateLabel(image) {
 }
 function renderFrames() {
   $('frames').replaceChildren();
-  frames.forEach((image, index) => {
+  archiveFrames.forEach((image, index) => {
     const button = el('button', null, 'frame'),
       img = el('img');
     img.src = `/api/images/${image.id}/thumbnail`;
@@ -293,8 +293,8 @@ function renderFrames() {
     button.addEventListener('click', () => openViewer(index));
     $('frames').append(button);
   });
-  $('frame-count').textContent = frames.length + ' görüntü';
-  $('archive-empty').hidden = !!frames.length;
+  $('frame-count').textContent = archiveFrames.length + ' görüntü';
+  $('archive-empty').hidden = !!archiveFrames.length;
   $('archive-empty').textContent =
     'Bu dönem için saklanan görüntü bulunamadı. Aşağıdaki geçmiş açıklamalarını inceleyin.';
   $('more-frames').hidden = !cursor;
@@ -318,13 +318,13 @@ function renderHistory(entries) {
 }
 function openViewer(index) {
   viewerIndex = index;
-  const image = frames[index];
+  const image = archiveFrames[index];
   $('viewer-title').textContent = date(image.capturedAt);
   $('viewer-image').src = `/api/images/${image.id}/original`;
   $('viewer-state').textContent = stateLabel(image);
   $('download-frame').href = `/api/images/${image.id}/original?download=1`;
   $('previous-frame').disabled = index === 0;
-  $('next-frame').disabled = index === frames.length - 1;
+  $('next-frame').disabled = index === archiveFrames.length - 1;
   if (!$('viewer').open) $('viewer').showModal();
 }
 on('archive-filter', 'submit', () => loadFrames());
