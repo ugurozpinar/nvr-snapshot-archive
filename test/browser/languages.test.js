@@ -84,4 +84,25 @@ test('administrator can use archive, errors and settings in all three languages'
   await expect(page.getByRole('button', { name: 'Kamerayı kaydet', exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await expect(page.locator('#camera-calibrated')).toHaveCount(0);
+  let finishCleanup;
+  const cleanupFinished = new Promise((resolve) => {
+    finishCleanup = resolve;
+  });
+  await page.route('**/api/cleanup', async (route) => {
+    expect(route.request().postDataJSON()).toEqual({ days: 3 });
+    await cleanupFinished;
+    await route.fulfill({ json: { cameras: 90, deleted: 12, skipped: 2 } });
+  });
+  await page.locator('#app-language').selectOption('en');
+  await expect(page.locator('#cleanup-start')).toHaveText('Start cleanup');
+  await page.locator('#cleanup-days').fill('3');
+  await page.locator('#cleanup-start').click();
+  await expect(page.locator('#cleanup-start')).toBeDisabled();
+  await expect(page.locator('#cleanup-result')).toHaveText('Cleanup is running…');
+  finishCleanup();
+  await expect(page.locator('#cleanup-result')).toHaveText(
+    'Cleanup complete · 90 cameras · 12 images deleted · 2 images skipped.',
+  );
+  await expect(page.locator('#cleanup-start')).toBeEnabled();
 });

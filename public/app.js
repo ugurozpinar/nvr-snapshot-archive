@@ -14,6 +14,9 @@ let csrf = '',
   maskImage = null,
   dragStart = null;
 const reasons = {
+  INVALID_CLEANUP_DAYS: 'Gün sayısı 1–36600 arasında tam sayı olmalı.',
+  CLEANUP_BUSY: 'Temizlik zaten çalışıyor; tamamlanmasını bekleyin.',
+  CLEANUP_POLICY_CHANGED: 'Temizlik sırasında kamera ayarları değişti. Temizliği yeniden başlatın.',
   INVALID_DATE: 'Geçerli bir tarih seçin.',
   INVALID_NVR: 'NVR adını ve kullanıcı adını kontrol edin.',
   INVALID_NVR_HOST: 'Geçerli bir HTTP veya HTTPS NVR adresi girin.',
@@ -446,6 +449,28 @@ on('test-nas', 'click', async () => {
   const r = await api('/api/nas/test', {});
   notice(t('NAS kimliği doğrulandı · {0} boş alan', bytes(r.freeBytes)));
 });
+on('cleanup-form', 'submit', async () => {
+  const button = $('cleanup-start');
+  if (button.disabled) return;
+  button.disabled = true;
+  $('cleanup-result').textContent = t('Temizlik çalışıyor…');
+  try {
+    const result = await api('/api/cleanup', { days: Number($('cleanup-days').value) });
+    $('cleanup-result').textContent = t(
+      'Temizlik tamamlandı · {0} kamera · {1} görüntü silindi · {2} görüntü atlandı.',
+      number(result.cameras),
+      number(result.deleted),
+      number(result.skipped),
+    );
+  } catch (e) {
+    $('cleanup-result').textContent = t(
+      'Temizlik tamamlanamadı; işlenen görüntüler silinmiş olabilir.',
+    );
+    throw e;
+  } finally {
+    button.disabled = false;
+  }
+});
 on('init-nas', 'click', async () => {
   await api('/api/nas/initialize', {});
   notice(t('NAS depo kimliği oluşturuldu.'));
@@ -517,7 +542,6 @@ function fillCamera() {
   $('camera-anchor').value = (c.anchorMs || 3600000) / 60000;
   $('camera-sensitivity').value = c.sensitivity || 'medium';
   $('camera-enabled').checked = c.enabled;
-  $('camera-calibrated').checked = !!c.calibrated;
   currentMasks = structuredClone(c.masks || []);
   maskImage = null;
   $('mask-canvas').hidden = true;
@@ -538,15 +562,12 @@ on('camera-form', 'submit', async () => {
       anchorMs: Math.round(Number($('camera-anchor').value) * 60000),
       sensitivity: $('camera-sensitivity').value,
       enabled: $('camera-enabled').checked,
-      calibrated: $('camera-calibrated').checked,
       masks: currentMasks,
     },
     'PUT',
   );
   await loadLists();
-  notice(
-    t('Kamera ayarları kaydedildi. Maske veya hassasiyet değiştiyse doğrulamayı yeniden yapın.'),
-  );
+  notice(t('Kamera ayarları kaydedildi.'));
 });
 on('copy-masks', 'click', async () => {
   const id = $('edit-camera').value;
@@ -557,14 +578,8 @@ on('copy-masks', 'click', async () => {
   try {
     const result = await api(`/api/cameras/${id}/copy-masks`, { masks });
     cameras = await api('/api/cameras');
-    if ($('edit-camera').value === id && JSON.stringify(currentMasks) === JSON.stringify(masks))
-      $('camera-calibrated').checked = !!cameras.find((c) => c.id === id)?.calibrated;
     notice(
-      t(
-        'Alanlar {0} kameraya uygulandı; {1} kamera güncellendi. Değişen kameraların karşılaştırmasını yeniden doğrulayın.',
-        result.total,
-        result.updated,
-      ),
+      t('Alanlar {0} kameraya uygulandı; {1} kamera güncellendi.', result.total, result.updated),
     );
   } finally {
     copyingMasks = false;
@@ -647,12 +662,10 @@ on('mask-canvas', 'pointerup', (e) => {
   const m = rect(dragStart, point(e));
   dragStart = null;
   if (m.width > 0.005 && m.height > 0.005) currentMasks.push(m);
-  $('camera-calibrated').checked = false;
   drawMasks();
 });
 on('clear-masks', 'click', () => {
   currentMasks = [];
-  $('camera-calibrated').checked = false;
   drawMasks();
 });
 on('add-mask', 'click', () => {
@@ -672,7 +685,6 @@ on('add-mask', 'click', () => {
   )
     throw Error('Alan görüntü sınırları içinde olmalı.');
   currentMasks.push(m);
-  $('camera-calibrated').checked = false;
   drawMasks();
 });
 on('compare', 'click', async () => {

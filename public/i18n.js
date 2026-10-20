@@ -1,6 +1,53 @@
 'use strict';
 window.KareI18n = (() => {
   const messages = {
+    'Manuel benzerlik temizliği': {
+      en: 'Manual similarity cleanup',
+      'pt-BR': 'Limpeza manual de imagens semelhantes',
+    },
+    'Son kaç gün': { en: 'Last how many days', 'pt-BR': 'Últimos quantos dias' },
+    'Temizliği başlat': { en: 'Start cleanup', 'pt-BR': 'Iniciar limpeza' },
+    'Tüm kameralarda seçilen son günlerdeki benzer görüntüler silinir. Referans görüntüler korunur; yedi günlük bekleme uygulanmaz.':
+      {
+        en: 'Delete similar images from the selected recent days across all cameras. Reference images are kept; the seven-day waiting period does not apply.',
+        'pt-BR':
+          'Exclui imagens semelhantes dos últimos dias selecionados em todas as câmeras. As imagens de referência são mantidas; a espera de sete dias não se aplica.',
+      },
+    'Otomatik sadeleştirme tüm kameralarda çalışır. Kapasite zorunluluğu yedi günlük görüntüleri de silebilir.':
+      {
+        en: 'Automatic compaction runs on all cameras. Capacity limits may also delete images within seven days.',
+        'pt-BR':
+          'A compactação automática funciona em todas as câmeras. Os limites de capacidade também podem excluir imagens dos últimos sete dias.',
+      },
+    'Gün sayısı 1–36600 arasında tam sayı olmalı.': {
+      en: 'Days must be a whole number between 1 and 36600.',
+      'pt-BR': 'O número de dias deve ser um inteiro entre 1 e 36600.',
+    },
+    'Temizlik zaten çalışıyor; tamamlanmasını bekleyin.': {
+      en: 'Cleanup is already running; wait for it to finish.',
+      'pt-BR': 'A limpeza já está em andamento; aguarde a conclusão.',
+    },
+    'Temizlik sırasında kamera ayarları değişti. Temizliği yeniden başlatın.': {
+      en: 'Camera settings changed during cleanup. Start cleanup again.',
+      'pt-BR': 'As configurações da câmera mudaram durante a limpeza. Inicie a limpeza novamente.',
+    },
+    'Temizlik çalışıyor…': { en: 'Cleanup is running…', 'pt-BR': 'Limpeza em andamento…' },
+    'Temizlik tamamlandı · {0} kamera · {1} görüntü silindi · {2} görüntü atlandı.': {
+      en: 'Cleanup complete · {0} cameras · {1} images deleted · {2} images skipped.',
+      'pt-BR': 'Limpeza concluída · {0} câmeras · {1} imagens excluídas · {2} imagens ignoradas.',
+    },
+    'Temizlik tamamlanamadı; işlenen görüntüler silinmiş olabilir.': {
+      en: 'Cleanup could not finish; processed images may already have been deleted.',
+      'pt-BR': 'A limpeza não foi concluída; as imagens processadas podem já ter sido excluídas.',
+    },
+    'Kamera ayarları kaydedildi.': {
+      en: 'Camera settings saved.',
+      'pt-BR': 'Configurações da câmera salvas.',
+    },
+    'Alanlar {0} kameraya uygulandı; {1} kamera güncellendi.': {
+      en: 'Areas applied to {0} cameras; {1} cameras updated.',
+      'pt-BR': 'Áreas aplicadas a {0} câmeras; {1} câmeras atualizadas.',
+    },
     'Geçerli bir tarih seçin.': {
       en: 'Select a valid date.',
       'pt-BR': 'Selecione uma data válida.',

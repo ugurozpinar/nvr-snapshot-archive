@@ -166,13 +166,11 @@ test('copying masks updates all cameras atomically without copying other camera 
   assert.deepEqual(c.repos.cameras.get('source'), {
     ...source,
     masks,
-    calibrated: false,
     policyVersion: 5,
   });
   assert.deepEqual(c.repos.cameras.get('target'), {
     ...target,
     masks,
-    calibrated: false,
     policyVersion: 9,
   });
   assert.deepEqual(c.repos.cameras.get('same'), same);
@@ -181,3 +179,64 @@ test('copying masks updates all cameras atomically without copying other camera 
   assert.equal((await q(endpoint, { masks })).status, 401);
 });
 module.exports = { apiContext };
+
+test('manual cleanup requires authentication and CSRF and validates the day range', async (t) => {
+  const c = await apiContext(t),
+    q = c.request;
+  const endpoint = '/api/cleanup';
+  assert.equal((await q(endpoint, { days: 3 })).status, 401);
+  await q('/api/setup', { token: 'test-setup', password: 'long-enough-password' });
+  assert.equal((await q(endpoint, { days: 3 }, 'POST', { 'X-CSRF-Token': 'bad' })).status, 403);
+  for (const days of [0, -1, 1.5, '3', 36601])
+    assert.equal((await q(endpoint, { days })).status, 400);
+  const result = await q(endpoint, { days: 3 });
+  assert.equal(result.status, 200);
+  assert.equal(result.data.deleted, 0);
+});
+
+test('manual cleanup API deletes recent similar images and rejects overlapping requests', async (t) => {
+  const c = await apiContext(t),
+    q = c.request;
+  await q('/api/setup', { token: 'test-setup', password: 'long-enough-password' });
+  c.repos.cameras.save({
+    id: 'cam',
+    calibrated: false,
+    policyVersion: 1,
+    intervalMs: 900000,
+    anchorMs: 3600000,
+    masks: [],
+  });
+  const buffer = await jpeg(),
+    now = Date.now();
+  for (let i = 0; i < 3; i++)
+    await c.store.persist({
+      id: `cleanup-${i}`,
+      cameraId: 'cam',
+      capturedAt: now - 3600000 + i * 900000,
+      buffer,
+    });
+  let entered, release;
+  const reading = new Promise((resolve) => {
+    entered = resolve;
+  });
+  const resume = new Promise((resolve) => {
+    release = resolve;
+  });
+  const originalRead = c.store.read;
+  c.store.read = async (id) => {
+    entered();
+    await resume;
+    return originalRead(id);
+  };
+  const first = q('/api/cleanup', { days: 3 });
+  await reading;
+  try {
+    assert.equal((await q('/api/cleanup', { days: 3 })).status, 409);
+  } finally {
+    release();
+  }
+  const result = await first;
+  assert.equal(result.status, 200);
+  assert.equal(result.data.deleted, 2);
+  assert.equal(c.repos.images.stats().count, 1);
+});

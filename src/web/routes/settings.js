@@ -1,8 +1,21 @@
 const path = require('node:path');
 const { apiError, positive } = require('../validation');
+const { cleanupRecent } = require('../../retention/compaction');
 
 function register(app, deps) {
   const { repos, config, scheduler, nas } = deps;
+  let cleaning = false;
+  app.post('/api/cleanup', async (req, res) => {
+    const days = positive(req.body.days, 'CLEANUP_DAYS');
+    if (days > 36600) throw apiError('INVALID_CLEANUP_DAYS');
+    if (cleaning) throw apiError('CLEANUP_BUSY', 409);
+    cleaning = true;
+    try {
+      res.json(await (deps.runCleanup ? deps.runCleanup(days) : cleanupRecent(deps, days)));
+    } finally {
+      cleaning = false;
+    }
+  });
   app.get('/api/settings', (req, res) =>
     res.json(
       repos.settings.get('main') || {

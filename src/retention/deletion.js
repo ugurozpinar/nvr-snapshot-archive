@@ -18,10 +18,10 @@ async function deleteBatch(images, reason, deps, existingJob = null, policy = nu
       const c = repos.cameras.get(job.policy.cameraId),
         s = repos.settings.get('main');
       if (
-        !c?.calibrated ||
-        c.policyVersion !== job.policy.version ||
-        !s?.compactionEnabled ||
-        (s.compactionVersion || 0) !== job.policy.compactionVersion
+        !c ||
+        (c.policyVersion || 1) !== job.policy.version ||
+        (!job.policy.manual &&
+          (!s?.compactionEnabled || (s.compactionVersion || 0) !== job.policy.compactionVersion))
       ) {
         cancelled = true;
         break;

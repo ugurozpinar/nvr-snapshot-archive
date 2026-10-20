@@ -258,9 +258,9 @@
             >
             <p class="muted">
               <span
-                data-i18n="Yalnızca karşılaştırması doğrulanmış kameralar sadeleştirilir. Kapasite zorunluluğu yedi günlük görüntüleri de silebilir."
-                >Yalnızca karşılaştırması doğrulanmış kameralar sadeleştirilir. Kapasite zorunluluğu
-                yedi günlük görüntüleri de silebilir.</span
+                data-i18n="Otomatik sadeleştirme tüm kameralarda çalışır. Kapasite zorunluluğu yedi günlük görüntüleri de silebilir."
+                >Otomatik sadeleştirme tüm kameralarda çalışır. Kapasite zorunluluğu yedi günlük
+                görüntüleri de silebilir.</span
               >
             </p>
             <div class="actions">
@@ -272,6 +272,32 @@
                 <span data-i18n="NAS depo kimliğini oluştur">NAS depo kimliğini oluştur</span>
               </button>
             </div>
+          </form>
+          <form id="cleanup-form" class="panel form-panel">
+            <h2 data-i18n="Manuel benzerlik temizliği">Manuel benzerlik temizliği</h2>
+            <label
+              ><span data-i18n="Son kaç gün">Son kaç gün</span>
+              <input
+                id="cleanup-days"
+                type="number"
+                min="1"
+                max="36600"
+                step="1"
+                value="7"
+                required
+              />
+            </label>
+            <p
+              class="muted"
+              data-i18n="Tüm kameralarda seçilen son günlerdeki benzer görüntüler silinir. Referans görüntüler korunur; yedi günlük bekleme uygulanmaz."
+            >
+              Tüm kameralarda seçilen son günlerdeki benzer görüntüler silinir. Referans görüntüler
+              korunur; yedi günlük bekleme uygulanmaz.
+            </p>
+            <button id="cleanup-start" class="primary" data-i18n="Temizliği başlat">
+              Temizliği başlat
+            </button>
+            <p id="cleanup-result" aria-live="polite"></p>
           </form>
           <div class="settings-columns">
             <form id="nvr-form" class="panel form-panel">
@@ -470,12 +496,6 @@
                   <span data-i18n="Karşılaştırmayı önizle">Karşılaştırmayı önizle</span>
                 </button>
                 <p id="compare-result"></p>
-                <label class="check"
-                  ><input id="camera-calibrated" type="checkbox" /><span
-                    data-i18n="Bu kameranın karşılaştırmasını doğruladım"
-                    >Bu kameranın karşılaştırmasını doğruladım</span
-                  ></label
-                >
               </div>
               <button class="primary">
                 <span data-i18n="Kamerayı kaydet">Kamerayı kaydet</span>

@@ -7,7 +7,7 @@ const { createHistory } = require('./history/service');
 const { createScheduler } = require('./capture/scheduler');
 const { createNasSupervisor } = require('./nas/supervisor');
 const { runTransfers, verifyPresence } = require('./nas/transfer');
-const { compactCamera } = require('./retention/compaction');
+const { compactCamera, cleanupRecent } = require('./retention/compaction');
 const { recoverDeletes } = require('./retention/deletion');
 const { enforceCapacity } = require('./retention/capacity');
 const { createWebServer } = require('./web/server');
@@ -40,8 +40,24 @@ async function createApp(config = loadConfig(), overrides = {}) {
     timers = [],
     maintenance = null,
     stopped = false,
-    backgroundError = null;
+    backgroundError = null,
+    cleanupRequested = false;
   deps.runtimeStatus = () => ({ backgroundError });
+  deps.runCleanup = async (days) => {
+    if (cleanupRequested || stopped)
+      throw Object.assign(Error('CLEANUP_BUSY'), { code: 'CLEANUP_BUSY', status: 409 });
+    cleanupRequested = true;
+    try {
+      await maintenance?.catch(() => {});
+      if (stopped)
+        throw Object.assign(Error('CLEANUP_BUSY'), { code: 'CLEANUP_BUSY', status: 409 });
+      maintenance = cleanupRecent(deps, days);
+      return await maintenance;
+    } finally {
+      maintenance = null;
+      cleanupRequested = false;
+    }
+  };
   async function maintain() {
     if (stopped) return;
     await store.reconcile();
@@ -83,7 +99,7 @@ async function createApp(config = loadConfig(), overrides = {}) {
     backgroundError = null;
   }
   function maintenanceTick() {
-    if (maintenance || stopped) return;
+    if (maintenance || cleanupRequested || stopped) return;
     maintenance = maintain()
       .catch((e) => {
         backgroundError = e.code || 'MAINTENANCE_FAILED';
@@ -128,7 +144,7 @@ async function createApp(config = loadConfig(), overrides = {}) {
       timers.forEach(clearInterval);
       nas.stop?.();
       await scheduler.stop({ deadlineMs: 5000 });
-      await maintenance;
+      await maintenance?.catch(() => {});
       if (server) {
         server.closeAllConnections();
         await new Promise((resolve) => server.close(resolve));

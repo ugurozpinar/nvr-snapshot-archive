@@ -16,7 +16,6 @@ function register(app, deps) {
       anchorMs: 3600000,
       masks: [],
       sensitivity: 'medium',
-      calibrated: false,
       policyVersion: 1,
       ...old,
     };
@@ -29,7 +28,6 @@ function register(app, deps) {
       'anchorMs',
       'masks',
       'sensitivity',
-      'calibrated',
     ])
       if (k in body) row[k] = body[k];
     if (
@@ -43,11 +41,7 @@ function register(app, deps) {
     if (row.channel > 1024) throw apiError('INVALID_CHANNEL');
     positive(row.intervalMs, 'INTERVAL', 1000);
     positive(row.anchorMs, 'ANCHOR', row.intervalMs);
-    if (
-      typeof row.enabled !== 'boolean' ||
-      typeof row.calibrated !== 'boolean' ||
-      !['low', 'medium', 'high'].includes(row.sensitivity)
-    )
+    if (typeof row.enabled !== 'boolean' || !['low', 'medium', 'high'].includes(row.sensitivity))
       throw apiError('INVALID_CAMERA');
     validateMasks(row.masks);
     if (
@@ -57,7 +51,6 @@ function register(app, deps) {
       )
     ) {
       row.policyVersion = (old.policyVersion || 1) + 1;
-      row.calibrated = false;
     }
     return row;
   }
