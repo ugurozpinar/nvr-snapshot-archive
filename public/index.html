@@ -533,6 +533,24 @@
         </button>
       </div>
       <p id="viewer-state" class="muted"></p>
+      <div class="viewer-bar viewer-playback">
+        <button id="play-backward" aria-pressed="false">
+          <span data-i18n="Geri oynat">Geri oynat</span>
+        </button>
+        <button id="pause-playback" disabled><span data-i18n="Duraklat">Duraklat</span></button>
+        <button id="play-forward" aria-pressed="false">
+          <span data-i18n="İleri oynat">İleri oynat</span>
+        </button>
+        <label
+          ><span data-i18n="Oynatma hızı">Oynatma hızı</span
+          ><select id="playback-speed"></select
+        ></label>
+      </div>
+      <p class="muted">
+        <span data-i18n="← / →: Önceki / sonraki kare · 1x: 0,3 kare/sn · 10x: 4 kare/sn"
+          >← / →: Önceki / sonraki kare · 1x: 0,3 kare/sn · 10x: 4 kare/sn</span
+        >
+      </p>
     </dialog>
   </body>
 </html>

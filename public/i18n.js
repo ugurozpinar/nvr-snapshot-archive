@@ -1,6 +1,14 @@
 'use strict';
 window.KareI18n = (() => {
   const messages = {
+    'Geri oynat': { en: 'Play backward', 'pt-BR': 'Reproduzir para trás' },
+    'İleri oynat': { en: 'Play forward', 'pt-BR': 'Reproduzir para frente' },
+    Duraklat: { en: 'Pause', 'pt-BR': 'Pausar' },
+    'Oynatma hızı': { en: 'Playback speed', 'pt-BR': 'Velocidade de reprodução' },
+    '← / →: Önceki / sonraki kare · 1x: 0,3 kare/sn · 10x: 4 kare/sn': {
+      en: '← / →: Previous / next frame · 1x: 0.3 frames/s · 10x: 4 frames/s',
+      'pt-BR': '← / →: Quadro anterior / seguinte · 1x: 0,3 quadros/s · 10x: 4 quadros/s',
+    },
     'Manuel benzerlik temizliği': {
       en: 'Manual similarity cleanup',
       'pt-BR': 'Limpeza manual de imagens semelhantes',

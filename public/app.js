@@ -9,6 +9,8 @@ let csrf = '',
   archiveFrames = [],
   cursor = null,
   viewerIndex = 0,
+  playbackDirection = 0,
+  playbackTimer = null,
   currentMasks = [],
   copyingMasks = false,
   maskImage = null,
@@ -317,6 +319,10 @@ function archiveQuery() {
   return new URLSearchParams({ cameraId: $('archive-camera').value, day: $('archive-date').value });
 }
 async function loadFrames(more = false) {
+  if (!more) {
+    stopPlayback();
+    $('viewer').close();
+  }
   const query = archiveQuery();
   if (!query.get('cameraId')) throw Error('Önce bir kamera ekleyin');
   if (more && cursor) query.set('cursor', cursor);
@@ -399,6 +405,7 @@ function renderHistory(entries) {
     );
 }
 function openViewer(index) {
+  if (!archiveFrames[index]) return;
   viewerIndex = index;
   const image = archiveFrames[index];
   $('viewer-title').textContent = date(image.capturedAt);
@@ -407,13 +414,71 @@ function openViewer(index) {
   $('download-frame').href = `/api/images/${image.id}/original?download=1`;
   $('previous-frame').disabled = index === 0;
   $('next-frame').disabled = index === archiveFrames.length - 1;
+  $('play-backward').disabled = index === 0;
+  $('play-forward').disabled = index === archiveFrames.length - 1;
+  if (
+    (playbackDirection === -1 && index === 0) ||
+    (playbackDirection === 1 && index === archiveFrames.length - 1)
+  )
+    stopPlayback();
   if (!$('viewer').open) $('viewer').showModal();
 }
+function stopPlayback() {
+  clearTimeout(playbackTimer);
+  playbackTimer = null;
+  playbackDirection = 0;
+  $('pause-playback').disabled = true;
+  $('play-backward').setAttribute('aria-pressed', 'false');
+  $('play-forward').setAttribute('aria-pressed', 'false');
+}
+function schedulePlayback() {
+  clearTimeout(playbackTimer);
+  const fps = 0.3 + ((Number($('playback-speed').value) - 1) * 3.7) / 9;
+  playbackTimer = setTimeout(() => {
+    if (!$('viewer').open) return stopPlayback();
+    openViewer(viewerIndex + playbackDirection);
+    if (playbackDirection) schedulePlayback();
+  }, 1000 / fps);
+}
+function startPlayback(direction) {
+  stopPlayback();
+  if (!archiveFrames[viewerIndex + direction]) return;
+  playbackDirection = direction;
+  $('pause-playback').disabled = false;
+  $(direction === 1 ? 'play-forward' : 'play-backward').setAttribute('aria-pressed', 'true');
+  schedulePlayback();
+}
+function stepViewer(direction) {
+  stopPlayback();
+  openViewer(viewerIndex + direction);
+}
+for (let speed = 1; speed <= 10; speed++) {
+  const option = el('option', speed + 'x');
+  option.value = speed;
+  $('playback-speed').append(option);
+}
+on('play-forward', 'click', () => startPlayback(1));
+on('play-backward', 'click', () => startPlayback(-1));
+on('pause-playback', 'click', stopPlayback);
+on('playback-speed', 'change', () => {
+  if (playbackDirection) schedulePlayback();
+});
+on('viewer', 'close', stopPlayback);
+on('viewer', 'cancel', stopPlayback);
+document.addEventListener('keydown', (event) => {
+  if (!$('viewer').open) return;
+  if (event.target.closest('input, select, textarea, [contenteditable]')) return;
+  if (event.altKey || event.ctrlKey || event.metaKey) return;
+  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+    event.preventDefault();
+    stepViewer(event.key === 'ArrowRight' ? 1 : -1);
+  }
+});
 on('archive-filter', 'submit', () => loadFrames());
 on('more-frames', 'click', () => loadFrames(true));
 on('close-viewer', 'click', () => $('viewer').close());
-on('previous-frame', 'click', () => openViewer(viewerIndex - 1));
-on('next-frame', 'click', () => openViewer(viewerIndex + 1));
+on('previous-frame', 'click', () => stepViewer(-1));
+on('next-frame', 'click', () => stepViewer(1));
 async function loadSettings() {
   const s = await api('/api/settings');
   $('quota').value = s.quotaBytes ? s.quotaBytes / GIB : '';

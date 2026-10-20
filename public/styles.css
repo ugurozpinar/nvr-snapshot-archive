@@ -584,6 +584,14 @@ dialog img {
   color: var(--teal);
   font-size: 12px;
 }
+.viewer-playback {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+.viewer-playback button[aria-pressed='true'] {
+  background: var(--teal);
+  color: white;
+}
 #viewer-state {
   margin: 5px 0;
   font-size: 12px;
