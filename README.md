@@ -6,6 +6,8 @@
 
 For developers and Linux operators who want a periodic photo history alongside an existing NVR. Kare is a self-hosted Node.js application with local storage and optional transfer to a mounted NAS; captures are saved locally before transfer.
 
+![Overview and Features](/public/ss1.png "App Overview and Key Features")
+
 - **Keep a bounded archive:** per-camera schedules, a storage quota, and optional comparison masks for thinning older similar images.
 - **Understand missing coverage:** daily summaries and recorded failure periods remain after images are removed.
 - **Try the browser without hardware:** the fixture below includes synthetic images and an example outage.
@@ -23,13 +25,14 @@ npm ci
 node test/helpers/browser-server.js
 ```
 
-Open [http://127.0.0.1:3099](http://127.0.0.1:3099). Enter `browser-token` in **Kurulum anahtarı**, choose a password of at least 12 characters in **Yönetici parolası**, then click **Yöneticiyi oluştur**.
+Open [http://127.0.0.1:3099](http://127.0.0.1:3099). Enter `browser-token` in the **Setup token** field, choose a password of at least 12 characters in the **Administrator password** field, then click **Create administrator**. UI labels in these instructions are translated into English; the application displays them in Turkish.
 
-1. Open **Arşiv**, choose **Ana giriş**, and set **Tarih** to `2026-10-19`.
-2. Click **Görüntüleri getir**. Expect four synthetic, solid-color images; click one to preview or download it.
-3. The same view includes **NVR erişim hatası**, an example recorded outage.
+1. Open **Archive**, choose **Main entrance**, and set **Date** to `2026-10-19`.
+2. Click **Fetch images**. Expect four synthetic, solid-color images; click one to preview or download it.
+3. The same view includes **NVR access error**, an example recorded outage.
 
 This is the existing browser-test fixture: 90 camera records, four generated JPEGs, no running capture scheduler and no real NVR/NAS connections. It uses a fresh OS temporary directory on every launch, ignores `.env`, and listens only on loopback. Stop with Ctrl+C; graceful shutdown removes the fixture data. An interrupted process may leave its temporary directory behind. Restarting creates a new setup. Do not use these fixed demo credentials for deployment.
+![Overview and Features](/public/ss2.png "App Overview and Key Features")
 
 To exercise capture and restart recovery without hardware as well:
 
@@ -55,11 +58,11 @@ Open [http://127.0.0.1:3080](http://127.0.0.1:3080). Read `SETUP_TOKEN` from you
 
 If startup reports `EADDRINUSE`, choose a free `PORT` in `.env` and open that port instead. An existing `PORT` environment variable takes precedence over `.env`. The demo uses port 3099; stop another demo or browser-test server before starting it.
 
-In **Ayarlar**:
+In **Settings**:
 
 1. Set the archive capacity before enabling capture. Start with local storage and compaction disabled.
 2. Add your NVR host, username and password. It must serve JPEGs from the endpoint above; ONVIF support alone is insufficient. The connection test defaults to channel 1.
-3. Add the channels you actually use. The default interval is 15 minutes. Check **Genel durum** for capture success, then **Arşiv** for the camera and capture date.
+3. Add the channels you actually use. The default interval is 15 minutes. Check **Overview** for capture success, then **Archive** for the camera and capture date.
 
 No cameras or device credentials ship with a normal installation. Local images go into `archive/`; catalog, settings and spool go into `data/`. Keep `DATA_DIR` on local disk and run only one application instance per data directory. LAN access requires changing `HOST`; internet deployment is outside the current scope.
 
