@@ -6,7 +6,7 @@
 
 For developers and Linux operators who want a periodic photo history alongside an existing NVR. Kare is a self-hosted Node.js application with local storage and optional transfer to a mounted NAS; captures are saved locally before transfer.
 
-![Overview and Features](/public/ss1.png "App Overview and Key Features")
+![Overview and Features](/public/ss1.jpg "App Overview and Key Features")
 
 - **Keep a bounded archive:** per-camera schedules, a storage quota, and optional comparison masks for thinning older similar images.
 - **Understand missing coverage:** daily summaries and recorded failure periods remain after images are removed.
@@ -32,7 +32,7 @@ Open [http://127.0.0.1:3099](http://127.0.0.1:3099). Enter `browser-token` in th
 3. The same view includes **NVR access error**, an example recorded outage.
 
 This is the existing browser-test fixture: 90 camera records, four generated JPEGs, no running capture scheduler and no real NVR/NAS connections. It uses a fresh OS temporary directory on every launch, ignores `.env`, and listens only on loopback. Stop with Ctrl+C; graceful shutdown removes the fixture data. An interrupted process may leave its temporary directory behind. Restarting creates a new setup. Do not use these fixed demo credentials for deployment.
-![Overview and Features](/public/ss2.png "App Overview and Key Features")
+![Overview and Features](/public/ss2.jpg "App Overview and Key Features")
 
 To exercise capture and restart recovery without hardware as well:
 
