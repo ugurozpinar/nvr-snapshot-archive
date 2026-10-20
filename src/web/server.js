@@ -30,6 +30,9 @@ function createWebServer(deps) {
   for (const route of routes) route.register(app, deps);
   app.use('/api', (req, res) => res.status(404).json({ error: 'NOT_FOUND' }));
   app.use(express.static(path.join(deps.config.projectRoot, 'public')));
+  app.use((req, res) =>
+    res.status(404).sendFile(path.join(deps.config.projectRoot, 'public/404.html')),
+  );
   app.use(errorHandler);
   return app;
 }

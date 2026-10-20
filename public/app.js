@@ -145,6 +145,7 @@ function options(select, items, valueKey = 'id', labelKey = 'name', placeholder 
   if (items.some((i) => i[valueKey] === previous)) select.value = previous;
 }
 function showAuth() {
+  document.querySelector('.skip-link').href = '#auth-form';
   $('application').hidden = true;
   $('auth-screen').hidden = false;
   $('setup-label').hidden = !setupRequired;
@@ -165,6 +166,7 @@ async function bootstrap() {
   await showApplication();
 }
 async function showApplication() {
+  document.querySelector('.skip-link').href = '#main-content';
   $('auth-screen').hidden = true;
   $('application').hidden = false;
   $('password').value = '';
@@ -180,9 +182,22 @@ async function loadLists() {
   fillCamera();
 }
 async function showPage(name) {
+  if (window.gsap) {
+    gsap.killTweensOf('.page');
+    gsap.set('.page', { clearProps: 'transform,opacity' });
+  }
   for (const p of ['status', 'archive', 'settings']) $('page-' + p).hidden = p !== name;
-  for (const b of document.querySelectorAll('[data-page]'))
+  for (const b of document.querySelectorAll('[data-page]')) {
     b.classList.toggle('active', b.dataset.page === name);
+    if (b.dataset.page === name) b.setAttribute('aria-current', 'page');
+    else b.removeAttribute('aria-current');
+  }
+  if (window.gsap && !matchMedia('(prefers-reduced-motion: reduce)').matches)
+    gsap.fromTo(
+      $('page-' + name),
+      { y: 12, opacity: 0.35 },
+      { y: 0, opacity: 1, duration: 0.42, ease: 'power3.out', clearProps: 'all' },
+    );
   $('notice').hidden = true;
   if (name === 'status') await refreshStatus();
   if (name === 'settings') {
@@ -191,7 +206,10 @@ async function showPage(name) {
   }
 }
 for (const button of document.querySelectorAll('[data-page]'))
-  button.addEventListener('click', () => showPage(button.dataset.page).catch(fail));
+  button.addEventListener('click', () => {
+    showPage(button.dataset.page).catch(fail);
+    $('main-content').focus({ preventScroll: true });
+  });
 on('auth-form', 'submit', async () => {
   $('auth-error').textContent = '';
   try {
@@ -218,6 +236,12 @@ async function refreshStatus() {
 }
 function renderStatus(data) {
   lastStatus = data;
+  const selectedCamera = $('observation-camera').value;
+  options($('observation-camera'), data.cameras);
+  if (!data.cameras.some((c) => c.id === selectedCamera))
+    $('observation-camera').value =
+      data.cameras.find((c) => c.latestImageId)?.id || data.cameras[0]?.id || '';
+  renderObservation();
   const s = data.storage;
   $('camera-count').textContent = data.cameras.filter((c) => c.enabled).length;
   $('camera-sub').textContent = t(
@@ -315,6 +339,54 @@ function renderStatus(data) {
   $('clock-label').textContent = t('SON KONTROL · ') + date(Date.now());
 }
 on('refresh-status', 'click', refreshStatus);
+function renderObservation() {
+  const camera = lastStatus?.cameras.find((c) => c.id === $('observation-camera').value);
+  const image = $('capture-preview');
+  const hasImage = Boolean(camera?.latestImageId);
+  $('capture-camera-name').textContent = camera?.name || 'Kare';
+  $('capture-time').textContent = camera?.latestImageAt ? date(camera.latestImageAt) : '';
+  $('capture-empty').hidden = hasImage;
+  $('capture-empty').querySelector('p').textContent = t('Henüz bir görüntü yok');
+  image.hidden = !hasImage;
+  $('open-camera-archive').disabled = !camera;
+  $('observation-camera').disabled = !camera;
+  if (hasImage) {
+    const source = `/api/images/${encodeURIComponent(camera.latestImageId)}/thumbnail`;
+    image.alt = camera.name + t(' son görüntüsü');
+    if (image.getAttribute('src') !== source) {
+      image.src = source;
+      if (window.gsap && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        gsap.killTweensOf(image);
+        gsap.fromTo(
+          image,
+          { x: 18, opacity: 0.3 },
+          { x: 0, opacity: 1, duration: 0.5, ease: 'power3.out', clearProps: 'all' },
+        );
+      }
+    }
+  } else image.removeAttribute('src');
+}
+$('capture-preview').addEventListener('error', () => {
+  $('capture-preview').hidden = true;
+  $('capture-empty').hidden = false;
+  $('capture-empty').querySelector('p').textContent = t('Görüntü yüklenemedi');
+});
+on('observation-camera', 'change', renderObservation);
+on('open-camera-archive', 'click', async () => {
+  const camera = lastStatus?.cameras.find((c) => c.id === $('observation-camera').value);
+  if (!camera) return;
+  $('archive-camera').value = camera.id;
+  if (camera.latestImageAt)
+    $('archive-date').value = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Istanbul',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(camera.latestImageAt);
+  await showPage('archive');
+  $('main-content').focus({ preventScroll: true });
+  $('archive-filter').requestSubmit();
+});
 function archiveQuery() {
   return new URLSearchParams({ cameraId: $('archive-camera').value, day: $('archive-date').value });
 }

@@ -11,6 +11,9 @@ module.exports = [
       'coverage/**',
       'test-results/**',
       'playwright-report/**',
+      'public/vendor/**',
+      '.agents/**',
+      '.shots/**',
     ],
   },
   js.configs.recommended,
@@ -29,7 +32,7 @@ module.exports = [
     files: ['public/**/*.js'],
     languageOptions: {
       sourceType: 'script',
-      globals: { ...globals.browser, KareI18n: 'readonly' },
+      globals: { ...globals.browser, KareI18n: 'readonly', gsap: 'readonly' },
     },
   },
   {

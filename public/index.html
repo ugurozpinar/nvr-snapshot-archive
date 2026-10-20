@@ -3,13 +3,39 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta
+      name="description"
+      content="Kare. A precise workspace for your cameras, captured moments and archive."
+    />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta property="og:title" content="Kare / Camera archive" />
+    <meta
+      property="og:description"
+      content="Every moment, within reach. Your private camera archive."
+    />
+    <meta property="og:image" content="/kare-social-preview-v1.png" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link
+      rel="preload"
+      href="/fonts/space-grotesk-400-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
     <title data-i18n="Kare — Kamera Arşivi">Kare — Kamera Arşivi</title>
     <link rel="stylesheet" href="/styles.css" />
     <script src="/i18n.js" defer></script>
+    <script src="/vendor/gsap.min.js" defer></script>
     <script src="/app.js" defer></script>
   </head>
   <body>
+    <a class="skip-link" href="#auth-form" data-i18n="İçeriğe geç">İçeriğe geç</a>
     <div id="auth-screen" class="auth-shell">
+      <div class="auth-art" aria-hidden="true">
+        <span class="auth-wordmark">kare<span>.</span></span>
+        <div class="optical-mark"><i></i><i></i><i></i><i></i><span>+</span></div>
+        <span class="auth-art-caption">CAMERA ARCHIVE / PRIVATE ACCESS</span>
+      </div>
       <div class="auth-language language-control">
         <label for="auth-language" data-i18n="Dil">Dil</label
         ><select id="auth-language" class="language-select">
@@ -18,8 +44,10 @@
           <option value="pt-BR">Português (Brasil)</option>
         </select>
       </div>
-      <form id="auth-form" class="auth-card">
-        <span class="brand-symbol">▣</span>
+      <form id="auth-form" class="auth-card" tabindex="-1">
+        <span class="brand-symbol" aria-hidden="true"
+          ><img src="/favicon.svg" alt="" width="36" height="36"
+        /></span>
         <p class="eyebrow"><span data-i18n="KARE / KAMERA ARŞİVİ">KARE / KAMERA ARŞİVİ</span></p>
         <h1><span data-i18n="Geçmiş, bir kare uzağında.">Geçmiş, bir kare uzağında.</span></h1>
         <p id="auth-note" class="muted">
@@ -47,7 +75,7 @@
     <div id="application" hidden>
       <aside class="sidebar">
         <a class="brand" href="/"
-          >▣
+          ><img src="/favicon.svg" alt="" width="32" height="32" />
           <span
             >Kare<small><span data-i18n="KAMERA ARŞİVİ">KAMERA ARŞİVİ</span></small></span
           ></a
@@ -73,7 +101,7 @@
           ><button id="logout"><span data-i18n="Çıkış">Çıkış</span></button>
         </div>
       </aside>
-      <main>
+      <main id="main-content" tabindex="-1">
         <header class="topbar">
           <span><span data-i18n="GÖRÜNTÜ ARŞİVİ">GÖRÜNTÜ ARŞİVİ</span></span
           ><span id="clock-label"></span>
@@ -134,12 +162,57 @@
               >
             </article>
           </div>
-          <div class="panel">
+          <section class="observation" aria-labelledby="observation-title">
+            <div class="capture-stage">
+              <div class="capture-meta">
+                <span class="capture-label" data-i18n="Son kare">Son kare</span
+                ><span id="capture-time"></span>
+              </div>
+              <div class="capture-image-wrap">
+                <img id="capture-preview" hidden alt="" width="1280" height="720" />
+                <div id="capture-empty" class="capture-empty">
+                  <span class="capture-crosshair" aria-hidden="true">+</span>
+                  <p data-i18n="Henüz bir görüntü yok">Henüz bir görüntü yok</p>
+                </div>
+                <span class="capture-corner corner-tl" aria-hidden="true"></span
+                ><span class="capture-corner corner-tr" aria-hidden="true"></span
+                ><span class="capture-corner corner-bl" aria-hidden="true"></span
+                ><span class="capture-corner corner-br" aria-hidden="true"></span>
+              </div>
+              <div class="capture-bottom">
+                <span id="capture-camera-name">Kare</span
+                ><span data-i18n="Kayıtlı görüntü">Kayıtlı görüntü</span>
+              </div>
+            </div>
+            <div class="observation-controls">
+              <h2 id="observation-title" data-i18n="Her an, elinizin altında.">
+                Her an, elinizin altında.
+              </h2>
+              <p class="muted" data-i18n="Son kaydı inceleyin. Bir kameradan geçmişe dönün.">
+                Son kaydı inceleyin. Bir kameradan geçmişe dönün.
+              </p>
+              <label for="observation-camera" data-i18n="Kamera seçin">Kamera seçin</label>
+              <select id="observation-camera"></select>
+              <button id="open-camera-archive" class="primary">
+                <span data-i18n="Arşivi aç">Arşivi aç</span><span aria-hidden="true">↗</span>
+              </button>
+              <p class="observation-note" data-i18n="Canlı yayın değil, son saklanan kare.">
+                Canlı yayın değil, son saklanan kare.
+              </p>
+            </div>
+          </section>
+          <div class="panel camera-index">
             <div class="panel-heading">
               <h2><span data-i18n="Kamera durumu">Kamera durumu</span></h2>
               <span class="tag"><span data-i18n="CANLI DURUM">CANLI DURUM</span></span>
             </div>
-            <div class="table-wrap">
+            <div
+              class="table-wrap"
+              tabindex="0"
+              role="region"
+              aria-label="Kamera durumu"
+              data-i18n-aria-label="Kamera durumu"
+            >
               <table>
                 <thead>
                   <tr>
@@ -220,6 +293,12 @@
               </p>
             </div>
           </div>
+          <nav class="settings-nav" aria-label="Ayarlar" data-i18n-aria-label="Ayarlar">
+            <a href="#storage-form" data-i18n="Depolama">Depolama</a>
+            <a href="#cleanup-form" data-i18n="Temizlik">Temizlik</a>
+            <a href="#nvr-form" data-i18n="NVR bağlantıları">NVR bağlantıları</a>
+            <a href="#camera-form" data-i18n="Kamera">Kamera</a>
+          </nav>
           <form id="storage-form" class="panel form-panel">
             <h2><span data-i18n="Depolama">Depolama</span></h2>
             <p class="muted">
@@ -541,6 +620,8 @@
       <div class="viewer-stage">
         <img
           id="viewer-image"
+          width="1280"
+          height="720"
           alt="Seçilen kamera görüntüsü"
           data-i18n-alt="Seçilen kamera görüntüsü"
         />

@@ -1,6 +1,32 @@
 'use strict';
 window.KareI18n = (() => {
   const messages = {
+    Temizlik: { en: 'Cleanup', 'pt-BR': 'Limpeza' },
+    'İçeriğe geç': { en: 'Skip to content', 'pt-BR': 'Ir para o conteúdo' },
+    'Son kare': { en: 'Latest capture', 'pt-BR': 'Última captura' },
+    'Henüz bir görüntü yok': {
+      en: 'No capture available yet',
+      'pt-BR': 'Nenhuma captura disponível',
+    },
+    'Görüntü yüklenemedi': {
+      en: 'Capture could not be loaded',
+      'pt-BR': 'Não foi possível carregar a captura',
+    },
+    'Kayıtlı görüntü': { en: 'Stored image', 'pt-BR': 'Imagem arquivada' },
+    'Her an, elinizin altında.': {
+      en: 'Every moment, within reach.',
+      'pt-BR': 'Cada momento, ao seu alcance.',
+    },
+    'Son kaydı inceleyin. Bir kameradan geçmişe dönün.': {
+      en: 'Inspect the latest capture. Step into a camera’s history.',
+      'pt-BR': 'Examine a última captura. Explore o histórico de uma câmera.',
+    },
+    'Kamera seçin': { en: 'Select a camera', 'pt-BR': 'Selecione uma câmera' },
+    'Arşivi aç': { en: 'Open archive', 'pt-BR': 'Abrir arquivo' },
+    'Canlı yayın değil, son saklanan kare.': {
+      en: 'The latest stored frame. This is not live video.',
+      'pt-BR': 'O último quadro arquivado. Não é vídeo ao vivo.',
+    },
     'Geri oynat': { en: 'Play backward', 'pt-BR': 'Reproduzir para trás' },
     'İleri oynat': { en: 'Play forward', 'pt-BR': 'Reproduzir para frente' },
     Duraklat: { en: 'Pause', 'pt-BR': 'Pausar' },
