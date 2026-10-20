@@ -17,6 +17,23 @@ test('administrator browses archive, explains gaps and configures masks and inte
   await expect(page.locator('.frame')).toHaveCount(4);
   await page.locator('.frame').first().click();
   await expect(page.getByRole('dialog')).toBeVisible();
+  for (const [width, height] of [
+    [1280, 900],
+    [390, 844],
+    [844, 390],
+  ]) {
+    await page.setViewportSize({ width, height });
+    const fits = await page.locator('#viewer').evaluate((dialog) => {
+      const controls = [...dialog.querySelectorAll('button, select, a, #viewer-image')];
+      return controls.every((control) => {
+        const rect = control.getBoundingClientRect();
+        return rect.x >= 0 && rect.y >= 0 && rect.right <= innerWidth && rect.bottom <= innerHeight;
+      });
+    });
+    expect(fits, `Viewer controls must fit ${width}×${height}`).toBe(true);
+    await page.screenshot({ path: `test-results/viewer-${width}x${height}.png` });
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.clock.install();
   await page.locator('#play-forward').click();
   await page.clock.runFor(3300);

@@ -506,51 +506,108 @@
       </main>
     </div>
     <dialog id="viewer">
-      <div class="viewer-bar">
-        <span id="viewer-title"></span
-        ><button id="close-viewer"><span data-i18n="Kapat">Kapat</span></button>
+      <header class="viewer-header">
+        <div class="viewer-heading">
+          <span id="viewer-title"></span>
+          <p id="viewer-state" class="muted"></p>
+        </div>
+        <div class="viewer-actions">
+          <a
+            id="download-frame"
+            download
+            aria-label="Özgün görüntüyü indir"
+            data-i18n-aria-label="Özgün görüntüyü indir"
+            title="Özgün görüntüyü indir"
+            data-i18n-title="Özgün görüntüyü indir"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3v12m-4-4 4 4 4-4M5 15v5h14v-5" />
+            </svg>
+            <span class="viewer-download-label" data-i18n="Özgün görüntüyü indir"
+              >Özgün görüntüyü indir</span
+            >
+          </a>
+          <button
+            id="close-viewer"
+            aria-label="Kapat"
+            data-i18n-aria-label="Kapat"
+            title="Kapat"
+            data-i18n-title="Kapat"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6" /></svg>
+          </button>
+        </div>
+      </header>
+      <div class="viewer-stage">
+        <img
+          id="viewer-image"
+          alt="Seçilen kamera görüntüsü"
+          data-i18n-alt="Seçilen kamera görüntüsü"
+        />
       </div>
-      <img
-        id="viewer-image"
-        alt="Seçilen kamera görüntüsü"
-        data-i18n-alt="Seçilen kamera görüntüsü"
-      />
-      <div class="viewer-bar">
-        <button
-          id="previous-frame"
-          aria-label="Önceki görüntü"
-          data-i18n-aria-label="Önceki görüntü"
-        >
-          <span data-i18n="← Önceki">← Önceki</span></button
-        ><a id="download-frame" download
-          ><span data-i18n="Özgün görüntüyü indir">Özgün görüntüyü indir</span></a
-        ><button
-          id="next-frame"
-          aria-label="Sonraki görüntü"
-          data-i18n-aria-label="Sonraki görüntü"
-        >
-          <span data-i18n="Sonraki →">Sonraki →</span>
-        </button>
-      </div>
-      <p id="viewer-state" class="muted"></p>
-      <div class="viewer-bar viewer-playback">
-        <button id="play-backward" aria-pressed="false">
-          <span data-i18n="Geri oynat">Geri oynat</span>
-        </button>
-        <button id="pause-playback" disabled><span data-i18n="Duraklat">Duraklat</span></button>
-        <button id="play-forward" aria-pressed="false">
-          <span data-i18n="İleri oynat">İleri oynat</span>
-        </button>
-        <label
-          ><span data-i18n="Oynatma hızı">Oynatma hızı</span
-          ><select id="playback-speed"></select
-        ></label>
-      </div>
-      <p class="muted">
-        <span data-i18n="← / →: Önceki / sonraki kare · 1x: 0,3 kare/sn · 10x: 4 kare/sn"
-          >← / →: Önceki / sonraki kare · 1x: 0,3 kare/sn · 10x: 4 kare/sn</span
-        >
-      </p>
+      <footer class="viewer-footer">
+        <div class="viewer-toolbar">
+          <div class="viewer-transport">
+            <button
+              id="previous-frame"
+              aria-label="Önceki görüntü"
+              data-i18n-aria-label="Önceki görüntü"
+              title="Önceki görüntü"
+              data-i18n-title="Önceki görüntü"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5v14m12-13-9 6 9 6Z" /></svg>
+            </button>
+            <button
+              id="play-backward"
+              aria-pressed="false"
+              aria-label="Geri oynat"
+              data-i18n-aria-label="Geri oynat"
+              title="Geri oynat"
+              data-i18n-title="Geri oynat"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m16 5-11 7 11 7Z" /></svg>
+            </button>
+            <button
+              id="pause-playback"
+              disabled
+              aria-label="Duraklat"
+              data-i18n-aria-label="Duraklat"
+              title="Duraklat"
+              data-i18n-title="Duraklat"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14M15 5v14" /></svg>
+            </button>
+            <button
+              id="play-forward"
+              aria-pressed="false"
+              aria-label="İleri oynat"
+              data-i18n-aria-label="İleri oynat"
+              title="İleri oynat"
+              data-i18n-title="İleri oynat"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7Z" /></svg>
+            </button>
+            <button
+              id="next-frame"
+              aria-label="Sonraki görüntü"
+              data-i18n-aria-label="Sonraki görüntü"
+              title="Sonraki görüntü"
+              data-i18n-title="Sonraki görüntü"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 5v14M6 6l9 6-9 6Z" /></svg>
+            </button>
+          </div>
+          <label class="viewer-speed"
+            ><span data-i18n="Oynatma hızı">Oynatma hızı</span
+            ><select id="playback-speed"></select
+          ></label>
+        </div>
+        <p class="viewer-hint muted">
+          <span data-i18n="← / →: Önceki / sonraki kare · 1x: 0,3 kare/sn · 10x: 4 kare/sn"
+            >← / →: Önceki / sonraki kare · 1x: 0,3 kare/sn · 10x: 4 kare/sn</span
+          >
+        </p>
+      </footer>
     </dialog>
   </body>
 </html>

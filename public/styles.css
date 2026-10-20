@@ -556,45 +556,193 @@ summary {
   background: #fff1ed;
   border-color: #ecc2b5;
 }
-dialog {
+#viewer {
   border: 1px solid var(--line);
   border-radius: 10px;
   max-width: 1050px;
   width: 90vw;
-  padding: 16px;
+  padding: 0;
   color: var(--ink);
+  background: var(--white);
+  height: min(820px, calc(100dvh - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
 }
-dialog::backdrop {
+#viewer[open] {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+#viewer::backdrop {
   background: #0a232bd0;
 }
-dialog img {
-  width: 100%;
-  max-height: 70vh;
-  object-fit: contain;
+.viewer-stage {
+  min-height: 0;
+  display: flex;
   background: #142b30;
 }
-.viewer-bar {
+#viewer-image {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: contain;
+}
+.viewer-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 10px;
-  padding: 10px 0;
+  gap: 16px;
+  padding: 16px 20px;
 }
-.viewer-bar a {
-  color: var(--teal);
-  font-size: 12px;
+.viewer-heading {
+  min-width: 0;
 }
-.viewer-playback {
-  flex-wrap: wrap;
-  justify-content: flex-start;
-}
-.viewer-playback button[aria-pressed='true'] {
-  background: var(--teal);
-  color: white;
+#viewer-title {
+  font-size: 16px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
 }
 #viewer-state {
-  margin: 5px 0;
+  margin: 4px 0 0;
   font-size: 12px;
+}
+.viewer-actions,
+.viewer-toolbar,
+.viewer-transport {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.viewer-actions {
+  flex-shrink: 0;
+}
+.viewer-actions a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 7px;
+  color: var(--teal);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.viewer-actions a:hover {
+  background: var(--paper);
+}
+#viewer svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.viewer-actions button,
+.viewer-transport button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+}
+.viewer-actions button {
+  border-color: transparent;
+}
+.viewer-footer {
+  padding: 14px 20px 12px;
+  border-top: 1px solid var(--line);
+}
+.viewer-toolbar {
+  justify-content: center;
+  gap: 20px;
+}
+.viewer-transport {
+  padding: 4px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.viewer-transport button {
+  border-color: transparent;
+  background: transparent;
+}
+.viewer-transport button:hover:not(:disabled) {
+  background: var(--white);
+  border-color: var(--line);
+}
+.viewer-transport button[aria-pressed='true'],
+.viewer-transport button[aria-pressed='true']:hover {
+  background: var(--teal);
+  color: var(--white);
+  border-color: var(--teal);
+}
+.viewer-speed {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding-left: 20px;
+  border-left: 1px solid var(--line);
+  white-space: nowrap;
+}
+.viewer-speed select {
+  width: 74px;
+  height: 40px;
+  padding: 6px 10px;
+}
+.viewer-hint {
+  margin: 10px 0 0;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.5;
+}
+@media (max-width: 600px) {
+  #viewer {
+    width: calc(100vw - 16px);
+    height: calc(100dvh - 16px);
+    max-height: calc(100dvh - 16px);
+  }
+  .viewer-header {
+    gap: 8px;
+    padding: 12px;
+  }
+  #viewer-title {
+    font-size: 14px;
+  }
+  .viewer-download-label {
+    display: none;
+  }
+  .viewer-actions a,
+  .viewer-actions button {
+    width: 44px;
+    height: 44px;
+    padding: 10px;
+    justify-content: center;
+  }
+  .viewer-actions {
+    gap: 2px;
+  }
+  .viewer-toolbar {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .viewer-transport button {
+    width: 44px;
+    height: 44px;
+  }
+  .viewer-speed {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .viewer-speed select {
+    height: 44px;
+  }
+  .viewer-footer {
+    padding: 12px;
+  }
 }
 @media (min-width: 1500px) {
   .frames {
