@@ -8,6 +8,9 @@ let csrf = '',
   nvrs = [],
   archiveFrames = [],
   cursor = null,
+  archiveGeneration = 0,
+  archivePageRequest = null,
+  viewerBufferRequest = null,
   viewerIndex = 0,
   playbackDirection = 0,
   playbackTimer = null,
@@ -15,6 +18,11 @@ let csrf = '',
   copyingMasks = false,
   maskImage = null,
   dragStart = null;
+const viewerPreloads = new Map();
+const VIEWER_LOOKAHEAD = 20;
+let viewerHasPrevious = true,
+  viewerHasNext = true;
+const adjacentRequests = new Map();
 const reasons = {
   INVALID_CLEANUP_DAYS: 'Gün sayısı 1–36600 arasında tam sayı olmalı.',
   CLEANUP_BUSY: 'Temizlik zaten çalışıyor; tamamlanmasını bekleyin.',
@@ -391,22 +399,117 @@ function archiveQuery() {
   return new URLSearchParams({ cameraId: $('archive-camera').value, day: $('archive-date').value });
 }
 async function loadFrames(more = false) {
+  if (more) {
+    if (archivePageRequest) return archivePageRequest;
+    if (!cursor) return;
+  }
   if (!more) {
+    archiveGeneration++;
+    archivePageRequest = null;
+    viewerBufferRequest = null;
+    viewerPreloads.clear();
+    adjacentRequests.clear();
+    viewerHasPrevious = viewerHasNext = true;
     stopPlayback();
     $('viewer').close();
   }
+  const generation = archiveGeneration;
   const query = archiveQuery();
   if (!query.get('cameraId')) throw Error('Önce bir kamera ekleyin');
   if (more && cursor) query.set('cursor', cursor);
-  const data = await api('/api/images?' + query);
-  if (!more) archiveFrames = [];
-  archiveFrames.push(...data.items);
-  cursor = data.nextCursor;
-  renderFrames();
+  const request = api('/api/images?' + query);
+  const pending = request.then((data) => {
+    if (generation !== archiveGeneration) return;
+    if (!more) archiveFrames = [];
+    archiveFrames.push(...data.items);
+    cursor = data.nextCursor;
+    renderFrames();
+  });
+  archivePageRequest = pending;
+  try {
+    await pending;
+  } finally {
+    if (archivePageRequest === pending) archivePageRequest = null;
+  }
+  if (generation !== archiveGeneration) return;
   if (!more) {
     const entries = await api('/api/history?' + archiveQuery());
     renderHistory(entries);
   }
+}
+async function fillViewerBuffer() {
+  const generation = archiveGeneration;
+  while ($('viewer').open && generation === archiveGeneration) {
+    const ahead = archiveFrames.slice(viewerIndex + 1, viewerIndex + VIEWER_LOOKAHEAD + 1);
+    const ids = new Set(ahead.map((image) => image.id));
+    for (const id of viewerPreloads.keys()) {
+      if (!ids.has(id)) viewerPreloads.delete(id);
+    }
+    for (const image of ahead) {
+      if (viewerPreloads.has(image.id)) continue;
+      const preload = new Image();
+      preload.src = `/api/images/${image.id}/original`;
+      viewerPreloads.set(image.id, preload);
+    }
+    if (ahead.length >= VIEWER_LOOKAHEAD || (!cursor && !viewerHasNext)) break;
+    if (cursor) await loadFrames(true);
+    else await loadAdjacentFrames(1);
+  }
+}
+async function loadAdjacentFrames(direction) {
+  if (adjacentRequests.has(direction)) return adjacentRequests.get(direction);
+  const generation = archiveGeneration;
+  const edge = direction === 1 ? archiveFrames.at(-1) : archiveFrames[0];
+  if (!edge) return;
+  const query = new URLSearchParams({
+    cameraId: edge.cameraId || $('archive-camera').value,
+    cursor: btoa(JSON.stringify({ time: edge.capturedAt, id: edge.id }))
+      .replaceAll('+', '-')
+      .replaceAll('/', '_')
+      .replaceAll('=', ''),
+    direction: direction === 1 ? 'forward' : 'backward',
+  });
+  const pending = api('/api/images?' + query).then((data) => {
+    if (generation !== archiveGeneration) return;
+    if (direction === 1) {
+      archiveFrames.push(...data.items);
+      viewerHasNext = !!data.nextCursor;
+    } else {
+      archiveFrames.unshift(...data.items.reverse());
+      viewerIndex += data.items.length;
+      viewerHasPrevious = !!data.nextCursor;
+    }
+    renderFrames();
+    if ($('viewer').open) updateViewerControls();
+  });
+  adjacentRequests.set(direction, pending);
+  try {
+    await pending;
+  } finally {
+    if (adjacentRequests.get(direction) === pending) adjacentRequests.delete(direction);
+  }
+}
+function updateViewerControls() {
+  const previous = viewerIndex === 0 && !viewerHasPrevious;
+  const next = viewerIndex === archiveFrames.length - 1 && !cursor && !viewerHasNext;
+  $('previous-frame').disabled = $('play-backward').disabled = previous;
+  $('next-frame').disabled = $('play-forward').disabled = next;
+  if ((playbackDirection === -1 && previous) || (playbackDirection === 1 && next)) stopPlayback();
+}
+async function prepareViewerStep(direction) {
+  if (archiveFrames[viewerIndex + direction]) return;
+  if (direction === 1 && cursor) await loadFrames(true);
+  else if (direction === 1 ? viewerHasNext : viewerHasPrevious) await loadAdjacentFrames(direction);
+}
+function ensureViewerBuffer() {
+  if (viewerBufferRequest) return;
+  const pending = fillViewerBuffer();
+  viewerBufferRequest = pending;
+  pending
+    .catch((error) => notice(error.message, true))
+    .finally(() => {
+      if (viewerBufferRequest === pending) viewerBufferRequest = null;
+    });
 }
 function stateLabel(image) {
   return image.availability === 'missing'
@@ -484,16 +587,11 @@ function openViewer(index) {
   $('viewer-image').src = `/api/images/${image.id}/original`;
   $('viewer-state').textContent = stateLabel(image);
   $('download-frame').href = `/api/images/${image.id}/original?download=1`;
-  $('previous-frame').disabled = index === 0;
-  $('next-frame').disabled = index === archiveFrames.length - 1;
-  $('play-backward').disabled = index === 0;
-  $('play-forward').disabled = index === archiveFrames.length - 1;
-  if (
-    (playbackDirection === -1 && index === 0) ||
-    (playbackDirection === 1 && index === archiveFrames.length - 1)
-  )
-    stopPlayback();
+  updateViewerControls();
   if (!$('viewer').open) $('viewer').showModal();
+  ensureViewerBuffer();
+  if (viewerIndex < VIEWER_LOOKAHEAD && viewerHasPrevious)
+    loadAdjacentFrames(-1).catch((error) => notice(error.message, true));
 }
 function stopPlayback() {
   clearTimeout(playbackTimer);
@@ -506,22 +604,44 @@ function stopPlayback() {
 function schedulePlayback() {
   clearTimeout(playbackTimer);
   const fps = 0.3 + ((Number($('playback-speed').value) - 1) * 3.7) / 9;
-  playbackTimer = setTimeout(() => {
+  playbackTimer = setTimeout(async () => {
     if (!$('viewer').open) return stopPlayback();
+    const direction = playbackDirection;
+    const generation = archiveGeneration;
+    try {
+      if (!archiveFrames[viewerIndex + direction]) await prepareViewerStep(direction);
+    } catch (error) {
+      notice(error.message, true);
+      return stopPlayback();
+    }
+    if (!$('viewer').open || generation !== archiveGeneration || direction !== playbackDirection)
+      return;
     openViewer(viewerIndex + playbackDirection);
     if (playbackDirection) schedulePlayback();
   }, 1000 / fps);
 }
 function startPlayback(direction) {
   stopPlayback();
-  if (!archiveFrames[viewerIndex + direction]) return;
+  if (
+    !archiveFrames[viewerIndex + direction] &&
+    !(direction === 1 ? cursor || viewerHasNext : viewerHasPrevious)
+  )
+    return;
   playbackDirection = direction;
   $('pause-playback').disabled = false;
   $(direction === 1 ? 'play-forward' : 'play-backward').setAttribute('aria-pressed', 'true');
   schedulePlayback();
 }
-function stepViewer(direction) {
+async function stepViewer(direction) {
   stopPlayback();
+  const generation = archiveGeneration;
+  try {
+    if (!archiveFrames[viewerIndex + direction]) await prepareViewerStep(direction);
+  } catch (error) {
+    notice(error.message, true);
+    return;
+  }
+  if (!$('viewer').open || generation !== archiveGeneration) return;
   openViewer(viewerIndex + direction);
 }
 for (let speed = 1; speed <= 10; speed++) {

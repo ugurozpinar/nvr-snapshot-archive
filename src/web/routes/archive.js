@@ -21,6 +21,7 @@ function register(app, deps) {
         ...bounds,
         ...(req.query.cameraId ? { cameraId: req.query.cameraId } : {}),
         after,
+        reverse: req.query.direction === 'backward',
         limit: limit + 1,
       }),
       more = items.length > limit;

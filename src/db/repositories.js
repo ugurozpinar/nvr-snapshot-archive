@@ -48,12 +48,18 @@ function createRepositories(db) {
           args.push(filter.to);
         }
         if (filter.after) {
+          const comparison = filter.reverse ? '<' : '>';
           where.push(
-            "(json_extract(data,'$.capturedAt') > ? OR (json_extract(data,'$.capturedAt') = ? AND id > ?))",
+            `(json_extract(data,'$.capturedAt') ${comparison} ? OR (json_extract(data,'$.capturedAt') = ? AND id ${comparison} ?))`,
           );
           args.push(filter.after.time, filter.after.time, filter.after.id);
         }
-        const order = table === 'images' ? "json_extract(data,'$.capturedAt'),id" : 'id';
+        const order =
+          table === 'images'
+            ? filter.reverse
+              ? "json_extract(data,'$.capturedAt') DESC,id DESC"
+              : "json_extract(data,'$.capturedAt'),id"
+            : 'id';
         const limit = Math.min(Math.max(Number(filter.limit) || 1000, 1), 10000);
         return db
           .prepare(

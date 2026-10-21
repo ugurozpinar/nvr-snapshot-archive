@@ -112,6 +112,31 @@ test('archive paginates tied timestamps, observes Istanbul dates and reads local
     [...first.items, ...second.items].map((x) => x.id),
     ['a', 'b', 'c'],
   );
+  c.repos.images.save({ id: 'older', cameraId: 'cam', capturedAt: time - 3 * 86400000 });
+  c.repos.images.save({ id: 'newer', cameraId: 'cam', capturedAt: time + 2 * 86400000 });
+  c.repos.images.save({ id: 'other-camera', cameraId: 'other', capturedAt: time - 1000 });
+  const edge = Buffer.from(JSON.stringify({ time, id: 'c' })).toString('base64url');
+  const backward = (await q('/api/images?cameraId=cam&direction=backward&limit=2&cursor=' + edge))
+    .data;
+  assert.deepEqual(
+    backward.items.map((x) => x.id),
+    ['b', 'a'],
+  );
+  const previousDay = (
+    await q('/api/images?cameraId=cam&direction=backward&cursor=' + backward.nextCursor)
+  ).data;
+  assert.deepEqual(
+    previousDay.items.map((x) => x.id),
+    ['older'],
+  );
+  assert.equal(previousDay.nextCursor, null);
+  const nextDay = (
+    await q('/api/images?cameraId=cam&to=' + (time + 3 * 86400000) + '&cursor=' + edge)
+  ).data;
+  assert.deepEqual(
+    nextDay.items.map((x) => x.id),
+    ['newer'],
+  );
   assert.equal((await q('/api/images/a/original')).status, 200);
   assert.equal((await q('/api/images/a/thumbnail')).status, 200);
   assert.equal((await q('/api/images/%2e%2e%2f/original')).status, 404);
