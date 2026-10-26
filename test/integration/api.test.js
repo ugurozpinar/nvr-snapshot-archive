@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { context, jpeg } = require('../helpers/context');
-async function apiContext(t) {
+async function apiContext(t, overrides = {}) {
   const { createWebServer } = require('../../src/web/server');
   const { createLocalStore } = require('../../src/archive/local-store');
   const { createHistory } = require('../../src/history/service');
@@ -19,6 +19,7 @@ async function apiContext(t) {
         throw Object.assign(Error(), { code: 'NAS_UNAVAILABLE' });
       },
     },
+    ...overrides,
   });
   const server = await new Promise((r) => {
     const s = app.listen(0, '127.0.0.1', () => r(s));
@@ -204,6 +205,75 @@ test('copying masks updates all cameras atomically without copying other camera 
   assert.equal((await q(endpoint, { masks })).status, 401);
 });
 module.exports = { apiContext };
+
+test('settings accepts only a mounted NAS path and preserves identity on later saves', async (t) => {
+  const fs = require('node:fs/promises');
+  const path = require('node:path');
+  const { createNasOperations } = require('../../src/nas/worker');
+  let root;
+  let online = true;
+  const ops = createNasOperations({
+    mountProbe: async () => {
+      if (!online) throw Object.assign(Error(), { code: 'NAS_UNAVAILABLE' });
+      return { mountPoint: root, source: '//fixture/share' };
+    },
+  });
+  const c = await apiContext(t, { nas: { request: ops, status: () => ({}) } });
+  root = path.join(c.dir, 'share');
+  await fs.mkdir(root);
+  // Keep the fixture NAS outside the configured local archive tree.
+  c.config.projectRoot = path.join(c.dir, 'project');
+  const q = c.request;
+  await q('/api/setup', { token: 'test-setup', password: 'long-enough-password' });
+  online = false;
+  assert.equal((await q('/api/settings', { nasPath: root }, 'PUT')).status, 503);
+  assert.equal(c.repos.settings.get('main').nasPath, null);
+  online = true;
+  const result = await q('/api/settings', { nasPath: root }, 'PUT');
+  assert.equal(result.status, 200);
+  assert.equal(result.data.mountSource, '//fixture/share');
+  assert.ok(result.data.depotId);
+  c.repos.images.save({ id: 'pending', cameraId: 'cam', state: 'pending', bytes: 100 });
+  online = false;
+  const saved = await q('/api/settings', { nasPath: root, quotaBytes: 2 * 1024 ** 3 }, 'PUT');
+  assert.equal(saved.status, 200);
+  assert.equal(saved.data.depotId, result.data.depotId);
+  assert.equal((await q('/api/settings', { nasPath: root + '-other' }, 'PUT')).status, 409);
+  assert.equal(c.repos.settings.get('main').nasPath, root);
+  online = true;
+  await fs.unlink(path.join(root, '.camera-archive-id'));
+  c.repos.settings.save({ ...result.data, nasSetupComplete: false });
+  const legacy = await q('/api/settings', { nasPath: root }, 'PUT');
+  assert.equal(legacy.status, 200);
+  assert.equal(
+    await fs.readFile(path.join(root, '.camera-archive-id'), 'utf8'),
+    result.data.depotId,
+  );
+});
+
+test('NAS path change is rejected if a capture finishes during mount discovery', async (t) => {
+  const path = require('node:path');
+  let c;
+  c = await apiContext(t, {
+    nas: {
+      status: () => ({}),
+      request: async () => {
+        c.repos.images.save({ id: 'new-capture', state: 'local', bytes: 100, cameraId: 'cam' });
+        return {
+          mountPoint: '/mnt/share',
+          mountSource: '//fixture/share',
+          depotId: 'fixture-depot',
+        };
+      },
+    },
+  });
+  const q = c.request;
+  await q('/api/setup', { token: 'test-setup', password: 'long-enough-password' });
+  const result = await q('/api/settings', { nasPath: path.join(c.dir, '..', 'new-share') }, 'PUT');
+  assert.equal(result.status, 409);
+  assert.equal(result.data.error, 'DEPOT_IN_USE');
+  assert.equal(c.repos.settings.get('main').nasPath, null);
+});
 
 test('manual cleanup requires authentication and CSRF and validates the day range', async (t) => {
   const c = await apiContext(t),

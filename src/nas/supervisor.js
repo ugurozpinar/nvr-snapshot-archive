@@ -84,7 +84,7 @@ function createNasSupervisor({ spawn, timeoutMs = 30000, retryMs = 15000 } = {})
   function pump() {
     if (pending || stuck || stopped || !queue.length) return;
     const task = queue.shift();
-    if (Date.now() < nextAttempt && !['health', 'initialize'].includes(task.op)) {
+    if (Date.now() < nextAttempt && !['health', 'initialize', 'configure'].includes(task.op)) {
       clearTimeout(task.timer);
       task.reject(error('NAS_UNAVAILABLE'));
       pump();
@@ -104,7 +104,7 @@ function createNasSupervisor({ spawn, timeoutMs = 30000, retryMs = 15000 } = {})
     if (
       stopped ||
       (stuck && child) ||
-      (Date.now() < nextAttempt && !['health', 'initialize'].includes(op))
+      (Date.now() < nextAttempt && !['health', 'initialize', 'configure'].includes(op))
     )
       return Promise.reject(error('NAS_UNAVAILABLE'));
     if (queue.length >= 64) return Promise.reject(error('NAS_BUSY'));

@@ -317,18 +317,16 @@
                 ><input id="spool-quota" type="number" min="0.05" step="any" /></label
               ><label class="wide"
                 ><span data-i18n="NAS arşiv yolu">NAS arşiv yolu</span
-                ><input id="nas-path" placeholder="/mnt/nas/kare" /></label
-              ><label
-                ><span data-i18n="Beklenen mount noktası">Beklenen mount noktası</span
-                ><input id="mount-point" placeholder="/mnt/nas" /></label
-              ><label
-                ><span data-i18n="Beklenen mount kaynağı">Beklenen mount kaynağı</span
-                ><input id="mount-source" placeholder="//sunucu/paylasim" /></label
-              ><label
-                ><span data-i18n="Depo kimliği">Depo kimliği</span
-                ><input id="depot-id" placeholder="kamera-arsivi"
+                ><input id="nas-path" placeholder="/mnt/nas_paylasimi"
               /></label>
             </div>
+            <p
+              class="muted"
+              data-i18n="Önceden bağladığınız NAS klasörünün yolunu girin. Bağlantı ve depo kimliği kaydederken otomatik belirlenir."
+            >
+              Önceden bağladığınız NAS klasörünün yolunu girin. Bağlantı ve depo kimliği kaydederken
+              otomatik belirlenir.
+            </p>
             <label class="check"
               ><input id="compaction-enabled" type="checkbox" /><span
                 data-i18n="Yedi günden eski görüntülerde sadeleştirmeyi etkinleştir"
@@ -346,9 +344,7 @@
               <button class="primary">
                 <span data-i18n="Depolamayı kaydet">Depolamayı kaydet</span></button
               ><button id="test-nas" type="button">
-                <span data-i18n="NAS bağlantısını test et">NAS bağlantısını test et</span></button
-              ><button id="init-nas" type="button">
-                <span data-i18n="NAS depo kimliğini oluştur">NAS depo kimliğini oluştur</span>
+                <span data-i18n="NAS bağlantısını test et">NAS bağlantısını test et</span>
               </button>
             </div>
           </form>

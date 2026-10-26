@@ -19,7 +19,14 @@ module.exports = (err, req, res, next) => {
             ? 409
             : code === 'ENOENT'
               ? 404
-              : code === 'INVALID_MASK'
+              : [
+                    'INVALID_MASK',
+                    'NAS_WRONG_MOUNT',
+                    'NAS_WRONG_DEPOT',
+                    'NAS_SYMLINK',
+                    'NAS_CONFIG_REQUIRED',
+                    'NAS_REQUIRES_LINUX',
+                  ].includes(code)
                 ? 400
                 : 500);
   res.status(status).json({ error: status === 500 ? 'INTERNAL_ERROR' : code });

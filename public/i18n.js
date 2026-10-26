@@ -1,6 +1,24 @@
 'use strict';
 window.KareI18n = (() => {
   const messages = {
+    'Önceden bağladığınız NAS klasörünün yolunu girin. Bağlantı ve depo kimliği kaydederken otomatik belirlenir.':
+      {
+        en: 'Enter the path of your mounted NAS folder. Mount details and depot identity are set automatically when you save.',
+        'pt-BR':
+          'Informe o caminho da pasta do NAS já montado. Os dados da montagem e a identidade do arquivo são definidos automaticamente ao salvar.',
+      },
+    'Geçerli bir NAS klasör yolu girin.': {
+      en: 'Enter a valid NAS folder path.',
+      'pt-BR': 'Informe um caminho válido para a pasta do NAS.',
+    },
+    'NAS desteği Linux gerektirir.': {
+      en: 'NAS support requires Linux.',
+      'pt-BR': 'O suporte a NAS requer Linux.',
+    },
+    'NAS yolu gerçek bir klasör olmalı; sembolik bağlantı kullanmayın.': {
+      en: 'The NAS path must be a real folder; do not use a symbolic link.',
+      'pt-BR': 'O caminho do NAS deve ser uma pasta real; não use um link simbólico.',
+    },
     Temizlik: { en: 'Cleanup', 'pt-BR': 'Limpeza' },
     'İçeriğe geç': { en: 'Skip to content', 'pt-BR': 'Ir para o conteúdo' },
     'Son kare': { en: 'Latest capture', 'pt-BR': 'Última captura' },

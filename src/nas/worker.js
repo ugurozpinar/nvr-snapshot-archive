@@ -63,6 +63,41 @@ function createNasOperations({ mountProbe = linuxMount, spaceProbe = fs.statfs }
     return result;
   }
   return async function execute(op, payload) {
+    if (op === 'configure') {
+      const root = path.resolve(payload.settings.nasPath);
+      const mount = await mountProbe(root);
+      if (mount.mountPoint === path.parse(root).root) throw error('NAS_WRONG_MOUNT');
+      if (
+        (payload.settings.mountPoint && payload.settings.mountPoint !== mount.mountPoint) ||
+        (payload.settings.mountSource && payload.settings.mountSource !== mount.source)
+      )
+        throw error('NAS_WRONG_MOUNT');
+      if ((await fs.realpath(root)) !== root || !(await fs.lstat(root)).isDirectory())
+        throw error('NAS_SYMLINK');
+      const marker = path.join(root, '.camera-archive-id');
+      const existing = await fs.lstat(marker).catch((e) => {
+        if (e.code === 'ENOENT') return null;
+        throw e;
+      });
+      if (existing && !existing.isFile()) throw error('NAS_SYMLINK');
+      if (!existing) {
+        const h = await fs.open(marker, 'wx', 0o600);
+        try {
+          await h.writeFile(payload.settings.depotId || crypto.randomUUID());
+          await h.sync();
+        } finally {
+          await h.close();
+        }
+        await syncDir(root);
+      }
+      const depotId = (await fs.readFile(marker, 'utf8')).trim();
+      if (!/^[\w-]{3,100}$/.test(depotId)) throw error('NAS_WRONG_DEPOT');
+      if (payload.settings.depotId && payload.settings.depotId !== depotId)
+        throw error('NAS_WRONG_DEPOT');
+      const discovered = { mountPoint: mount.mountPoint, mountSource: mount.source, depotId };
+      await verify({ nasPath: root, ...discovered });
+      return discovered;
+    }
     const root = await verify(payload.settings, op === 'initialize');
     if (op === 'initialize') {
       const marker = path.join(root, '.camera-archive-id');

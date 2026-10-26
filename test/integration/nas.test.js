@@ -5,6 +5,69 @@ const { context, jpeg } = require('../helpers/context');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
+test('NAS path alone discovers the mount and creates or reuses depot identity', async (t) => {
+  const { createNasOperations } = require('../../src/nas/worker');
+  const ctx = context(t);
+  const root = path.join(ctx.dir, 'mounted-share');
+  await fs.mkdir(root);
+  let mount = { mountPoint: root, source: '//fixture/share' };
+  const ops = createNasOperations({ mountProbe: async () => mount });
+  const discovered = await ops('configure', { settings: { nasPath: root } });
+  assert.equal(discovered.mountPoint, root);
+  assert.equal(discovered.mountSource, '//fixture/share');
+  assert.ok(discovered.depotId);
+  assert.equal(
+    await fs.readFile(path.join(root, '.camera-archive-id'), 'utf8'),
+    discovered.depotId,
+  );
+  assert.deepEqual(await ops('configure', { settings: { nasPath: root } }), discovered);
+  const settings = { nasPath: root, ...discovered };
+  await ops('health', { settings });
+  mount = { mountPoint: path.parse(root).root, source: '/dev/local' };
+  await assert.rejects(ops('configure', { settings: { nasPath: root } }), {
+    code: 'NAS_WRONG_MOUNT',
+  });
+  await assert.rejects(ops('health', { settings }), { code: 'NAS_WRONG_MOUNT' });
+});
+
+test('automatic NAS setup preserves existing identity and rejects malformed markers', async (t) => {
+  const { createNasOperations } = require('../../src/nas/worker');
+  const ctx = context(t);
+  const root = path.join(ctx.dir, 'mounted-share');
+  await fs.mkdir(root);
+  const marker = path.join(root, '.camera-archive-id');
+  const ops = createNasOperations({
+    mountProbe: async () => ({ mountPoint: root, source: '//fixture/share' }),
+  });
+  await fs.writeFile(marker, 'existing-depot');
+  assert.equal((await ops('configure', { settings: { nasPath: root } })).depotId, 'existing-depot');
+  await fs.writeFile(marker, '');
+  await assert.rejects(ops('configure', { settings: { nasPath: root } }), {
+    code: 'NAS_WRONG_DEPOT',
+  });
+  assert.equal(await fs.readFile(marker, 'utf8'), '');
+});
+
+test('automatic setup completes legacy configuration without trusting a different mount', async (t) => {
+  const { createNasOperations } = require('../../src/nas/worker');
+  const ctx = context(t);
+  const root = path.join(ctx.dir, 'legacy-share');
+  await fs.mkdir(root);
+  const settings = {
+    nasPath: root,
+    mountPoint: root,
+    mountSource: '//fixture/share',
+    depotId: 'legacy-depot',
+  };
+  let source = '//wrong/share';
+  const ops = createNasOperations({ mountProbe: async () => ({ mountPoint: root, source }) });
+  await assert.rejects(ops('configure', { settings }), { code: 'NAS_WRONG_MOUNT' });
+  await assert.rejects(fs.stat(path.join(root, '.camera-archive-id')), { code: 'ENOENT' });
+  source = '//fixture/share';
+  assert.equal((await ops('configure', { settings })).depotId, 'legacy-depot');
+  await ops('health', { settings });
+});
+
 test('stuck NAS worker times out without spawning replacements while still alive', async () => {
   const { createNasSupervisor } = require('../../src/nas/supervisor');
   let spawned = 0;

@@ -83,7 +83,9 @@ const reasons = {
   SETUP_TOKEN_INVALID: 'Kurulum anahtarı doğru değil',
   PASSWORD_LENGTH_12_256: 'Parola 12–256 karakter olmalı',
   LOGIN_RATE_LIMIT: 'Çok fazla deneme; 15 dakika bekleyin',
-  NAS_CONFIG_REQUIRED: 'NAS için mount noktası, kaynak ve depo kimliği gerekli',
+  NAS_CONFIG_REQUIRED: 'Geçerli bir NAS klasör yolu girin.',
+  NAS_REQUIRES_LINUX: 'NAS desteği Linux gerektirir.',
+  NAS_SYMLINK: 'NAS yolu gerçek bir klasör olmalı; sembolik bağlantı kullanmayın.',
   CAMERA_HAS_ARCHIVE_DISABLE_INSTEAD: 'Arşivi olan kamerayı silmek yerine devre dışı bırakın',
 };
 function reason(code) {
@@ -675,13 +677,7 @@ async function loadSettings() {
   const s = await api('/api/settings');
   $('quota').value = s.quotaBytes ? s.quotaBytes / GIB : '';
   $('spool-quota').value = s.spoolQuotaBytes ? s.spoolQuotaBytes / GIB : '';
-  for (const [id, key] of [
-    ['nas-path', 'nasPath'],
-    ['mount-point', 'mountPoint'],
-    ['mount-source', 'mountSource'],
-    ['depot-id', 'depotId'],
-  ])
-    $(id).value = s[key] || '';
+  $('nas-path').value = s.nasPath || '';
   $('compaction-enabled').checked = !!s.compactionEnabled;
 }
 on('storage-form', 'submit', async () => {
@@ -693,9 +689,6 @@ on('storage-form', 'submit', async () => {
         ? Math.round(Number($('spool-quota').value) * GIB)
         : null,
       nasPath: $('nas-path').value.trim() || null,
-      mountPoint: $('mount-point').value.trim(),
-      mountSource: $('mount-source').value.trim(),
-      depotId: $('depot-id').value.trim(),
       compactionEnabled: $('compaction-enabled').checked,
     },
     'PUT',
@@ -727,10 +720,6 @@ on('cleanup-form', 'submit', async () => {
   } finally {
     button.disabled = false;
   }
-});
-on('init-nas', 'click', async () => {
-  await api('/api/nas/initialize', {});
-  notice(t('NAS depo kimliği oluşturuldu.'));
 });
 function renderNvrs() {
   $('nvr-list').replaceChildren();
